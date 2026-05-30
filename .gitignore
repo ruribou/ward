@@ -25,3 +25,10 @@ kubeconfig
 *.tfstate.*
 .vault_pass
 vault_pass*
+
+# node / typescript
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
