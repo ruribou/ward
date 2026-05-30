@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# editor
+*.swp
+*~
+
+# secrets / local — never commit (infra repo + public: be strict)
+.env
+*.env
+secrets/
+*.key
+*.pem
+*.crt
+id_*
+kubeconfig
+*.kubeconfig
+
+# IaC state / secrets (tools TBD — add patterns as we pick them)
+*.tfstate
+*.tfstate.*
+.vault_pass
+vault_pass*
