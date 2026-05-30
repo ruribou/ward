@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   check:
+    name: Node v${{ matrix.node }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
