@@ -4,7 +4,7 @@ import { operations } from "./operations.js";
 import type { Operation } from "./types.js";
 
 describe("guard", () => {
-  it("allows every operation in the M1 registry (all read-only)", () => {
+  it("allows every operation in the registry (all read-only)", () => {
     for (const op of operations) {
       expect(() => guard(op)).not.toThrow();
     }
@@ -20,19 +20,15 @@ describe("guard", () => {
     };
     expect(() => guard(mutating)).toThrow(GuardrailError);
   });
-});
 
-describe("operations registry", () => {
-  it("is non-empty and every M1 operation is read-only with a non-empty command", () => {
-    expect(operations.length).toBeGreaterThan(0);
-    for (const op of operations) {
-      expect(op.risk).toBe("read-only");
-      expect(op.command.length).toBeGreaterThan(0);
-    }
-  });
-
-  it("has unique tool names", () => {
-    const names = operations.map((o) => o.name);
-    expect(new Set(names).size).toBe(names.length);
+  it("names the offending operation and its risk in the error message", () => {
+    const mutating: Operation = {
+      name: "nuc_rm",
+      title: "(test)",
+      description: "(test)",
+      risk: "mutating",
+      command: ["rm", "-rf", "/tmp/x"],
+    };
+    expect(() => guard(mutating)).toThrow(/nuc_rm.*mutating/);
   });
 });

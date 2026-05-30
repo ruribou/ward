@@ -47,7 +47,7 @@ NUC（substrate）
 
 ## 必要なもの
 
-- Node.js >= 20
+- Node.js >= 22（現行サポート中の LTS）
 - `~/.ssh/config` に NUC への接続エイリアス（既定: `nuc`。`WARD_NUC_HOST` で変更可）
 - Claude Code
 
