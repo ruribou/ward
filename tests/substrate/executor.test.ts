@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("node:child_process", () => ({ execFile: vi.fn() }));
 
 import { execFile } from "node:child_process";
-import { runOperation } from "./executor.js";
-import type { Operation } from "./types.js";
+import { runOperation } from "../../src/substrate/executor.js";
+import type { Operation } from "../../src/types.js";
 
 const op: Operation = {
   name: "nuc_disk",

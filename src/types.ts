@@ -1,8 +1,10 @@
 /**
  * Risk classification for an operation.
  *
- * M1 uses only "read-only". "mutating" exists from day one so the guardrail layer
- * is meaningful now and so M3 (the first writes) is a data change, not a redesign.
+ * The registry today is still entirely "read-only". "mutating" exists from day
+ * one so the guardrail layer is meaningful: M3 builds the approval gate that
+ * governs mutating operations, so adding the first real write later is a YAML
+ * data change, not a redesign.
  */
 export type RiskClass = "read-only" | "mutating";
 
@@ -31,4 +33,43 @@ export interface ExecResult {
   readonly exitCode: number;
   /** Wall-clock duration in milliseconds. */
   readonly ms: number;
+}
+
+/**
+ * How much autonomy ward grants — the staged-autonomy dial (CONCEPT RQ2).
+ *
+ * - "read-only": only read-only operations may run. The safe floor (default).
+ * - "approval":  read-only runs directly; mutating runs only after an explicit
+ *                human approval (the propose → approve gate).
+ *
+ * A future "autonomous" level (mutating runs directly) is deliberately not here
+ * yet — it is the last rung of the ladder, added only with its own guardrails.
+ */
+export type AutonomyLevel = "read-only" | "approval";
+
+/**
+ * A mutating operation that has been *proposed* but not yet executed. It sits in
+ * the pending store until a human approves it (via ward_approve) or it is
+ * discarded. This is the seam where "AI proposes, human approves" becomes data.
+ */
+export interface Proposal {
+  /** Stable, one-time handle the approver names, e.g. "p1". Never part of a command. */
+  readonly id: string;
+  /** The operation that will run verbatim if this proposal is approved. */
+  readonly op: Operation;
+}
+
+/**
+ * One entry in the audit trail. Every operation leaves a trace; mutating ones
+ * leave two — a "proposed" event and, once approved, an "executed" event — so
+ * the record shows both what was asked for and what actually ran.
+ */
+export interface AuditEntry {
+  /** "proposed" = gated, awaiting approval; "executed" = the command actually ran. */
+  readonly event: "proposed" | "executed";
+  readonly op: Operation;
+  /** Set for proposed events and for executions that came from an approval. */
+  readonly proposalId?: string;
+  /** Set only for "executed" events. */
+  readonly result?: ExecResult;
 }

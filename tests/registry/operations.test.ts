@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OperationLoadError, operations, parseOperations } from "./operations.js";
+import { OperationLoadError, operations, parseOperations } from "../../src/registry/operations.js";
 
 describe("operations registry", () => {
   it("is non-empty and uniquely named", () => {
@@ -8,7 +8,7 @@ describe("operations registry", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("only contains read-only operations (the M1 invariant)", () => {
+  it("only contains read-only operations (the registry is still entirely read-only)", () => {
     for (const op of operations) {
       expect(op.risk).toBe("read-only");
     }
