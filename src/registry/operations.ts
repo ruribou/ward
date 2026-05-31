@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import type { Operation, RiskClass } from "./types.js";
+import type { Operation, RiskClass } from "../types.js";
 
 /**
  * The capability registry is declared in operations.yaml (the single source of
@@ -102,7 +102,8 @@ export function parseOperations(yamlText: string): Operation[] {
 
 /** Registry file location. Override with WARD_OPERATIONS_FILE (e.g. in tests). */
 const REGISTRY_PATH =
-  process.env.WARD_OPERATIONS_FILE ?? fileURLToPath(new URL("../operations.yaml", import.meta.url));
+  process.env.WARD_OPERATIONS_FILE ??
+  fileURLToPath(new URL("../../operations.yaml", import.meta.url));
 
 /**
  * The loaded, validated registry. Evaluated at import time, so a malformed

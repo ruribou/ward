@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { performance } from "node:perf_hooks";
-import type { ExecResult, Operation } from "./types.js";
-import { config } from "./config.js";
+import type { ExecResult, Operation } from "../types.js";
+import { config } from "../config.js";
 
 const COMMAND_TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_BYTES = 1024 * 1024;
