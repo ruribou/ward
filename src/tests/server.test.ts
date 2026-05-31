@@ -129,7 +129,7 @@ describe("ward MCP server — approval gate (in-memory)", () => {
       audit,
     });
 
-    await client.callTool({ name: "nuc_reboot", arguments: {} }); // mints p1
+    await client.callTool({ name: "nuc_reboot", arguments: {} });
     const res = await client.callTool({ name: "ward_approve", arguments: { id: "p1" } });
 
     expect(runOperation).toHaveBeenCalledOnce();
@@ -149,13 +149,13 @@ describe("ward MCP server — approval gate (in-memory)", () => {
       audit: () => {},
     });
 
-    await client.callTool({ name: "nuc_reboot", arguments: {} }); // mints p1
-    await client.callTool({ name: "ward_approve", arguments: { id: "p1" } }); // consumes p1
+    await client.callTool({ name: "nuc_reboot", arguments: {} });
+    await client.callTool({ name: "ward_approve", arguments: { id: "p1" } });
     const again = await client.callTool({ name: "ward_approve", arguments: { id: "p1" } });
 
     expect((again as { isError?: boolean }).isError).toBe(true);
     expect(textOf(again)).toContain("p1");
-    expect(runOperation).toHaveBeenCalledOnce(); // not run again
+    expect(runOperation).toHaveBeenCalledOnce();
   });
 
   it("refuses an unknown proposal id without executing anything", async () => {
