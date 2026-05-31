@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { audit } from "../../src/guardrail/audit.js";
-import type { AuditEntry, ExecResult, Operation } from "../../src/types.js";
+import { audit } from "../../guardrail/audit.js";
+import type { AuditEntry, ExecResult, Operation } from "../../types.js";
 
 const op: Operation = {
   name: "nuc_disk",
@@ -62,7 +62,7 @@ describe("audit", () => {
     vi.resetModules(); // so config (env-read at import) and audit pick up the path
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     try {
-      const { audit: freshAudit } = await import("../../src/guardrail/audit.js");
+      const { audit: freshAudit } = await import("../../guardrail/audit.js");
       freshAudit({ event: "proposed", op, proposalId: "p1" });
       freshAudit({ event: "executed", op, result, proposalId: "p1" });
 

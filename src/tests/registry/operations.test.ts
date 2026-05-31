@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OperationLoadError, operations, parseOperations } from "../../src/registry/operations.js";
+import { OperationLoadError, operations, parseOperations } from "../../registry/operations.js";
 
 describe("operations registry", () => {
   it("is non-empty and uniquely named", () => {

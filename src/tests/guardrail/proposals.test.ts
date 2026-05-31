@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ProposalStore } from "../../src/guardrail/proposals.js";
-import type { Operation } from "../../src/types.js";
+import { ProposalStore } from "../../guardrail/proposals.js";
+import type { Operation } from "../../types.js";
 
 const op: Operation = {
   name: "nuc_reboot",

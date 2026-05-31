@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { guard, GuardrailError } from "../../src/guardrail/guard.js";
-import { operations } from "../../src/registry/operations.js";
-import type { Operation } from "../../src/types.js";
+import { guard, GuardrailError } from "../../guardrail/guard.js";
+import { operations } from "../../registry/operations.js";
+import type { Operation } from "../../types.js";
 
 const mutating: Operation = {
   name: "nuc_reboot",

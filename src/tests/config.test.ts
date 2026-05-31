@@ -9,7 +9,7 @@ async function freshConfig(autonomy: string | undefined) {
     process.env.WARD_AUTONOMY = autonomy;
   }
   vi.resetModules();
-  return (await import("../src/config.js")).config;
+  return (await import("../config.js")).config;
 }
 
 afterEach(() => {
