@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { operations } from "./operations.js";
+import { OperationLoadError, operations, parseOperations } from "./operations.js";
 
 describe("operations registry", () => {
   it("is non-empty and uniquely named", () => {
@@ -34,5 +34,71 @@ describe("operations registry", () => {
       expect(op.title.length).toBeGreaterThan(0);
       expect(op.description.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("parseOperations (the loader guardrail)", () => {
+  const valid = `
+operations:
+  - name: nuc_uptime
+    title: t
+    description: d
+    risk: read-only
+    command: [uptime]
+`;
+
+  it("loads a well-formed registry", () => {
+    const ops = parseOperations(valid);
+    expect(ops).toHaveLength(1);
+    expect(ops[0]).toMatchObject({ name: "nuc_uptime", command: ["uptime"] });
+  });
+
+  it("rejects a command argument with a shell metacharacter", () => {
+    const yaml = `
+operations:
+  - name: nuc_pwn
+    title: t
+    description: d
+    risk: read-only
+    command: [sh, -c, "rm -rf /"]
+`;
+    expect(() => parseOperations(yaml)).toThrow(OperationLoadError);
+  });
+
+  it("rejects a path argument (slash is not in the safe charset)", () => {
+    const yaml = `
+operations:
+  - name: nuc_cat
+    title: t
+    description: d
+    risk: read-only
+    command: [cat, /etc/shadow]
+`;
+    expect(() => parseOperations(yaml)).toThrow(/unsafe argument/);
+  });
+
+  it("rejects an unknown risk class", () => {
+    const yaml = `
+operations:
+  - name: nuc_uptime
+    title: t
+    description: d
+    risk: yolo
+    command: [uptime]
+`;
+    expect(() => parseOperations(yaml)).toThrow(/risk must be one of/);
+  });
+
+  it("rejects an empty registry", () => {
+    expect(() => parseOperations("operations: []")).toThrow(OperationLoadError);
+  });
+
+  it("rejects duplicate operation names", () => {
+    const yaml = `
+operations:
+  - { name: nuc_uptime, title: t, description: d, risk: read-only, command: [uptime] }
+  - { name: nuc_uptime, title: t, description: d, risk: read-only, command: [uptime] }
+`;
+    expect(() => parseOperations(yaml)).toThrow(/duplicate/);
   });
 });
