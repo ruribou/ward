@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { operations } from "../src/registry/operations.js";
-import { createServer, type ServerDeps } from "../src/server.js";
-import type { ExecResult, Operation } from "../src/types.js";
+import { operations } from "../registry/operations.js";
+import { createServer, type ServerDeps } from "../server.js";
+import type { ExecResult, Operation } from "../types.js";
 
 function fakeResult(over: Partial<ExecResult> = {}): ExecResult {
   return { stdout: "FAKE", stderr: "", exitCode: 0, ms: 1, ...over };
@@ -17,8 +17,10 @@ async function connect(deps: Partial<ServerDeps>): Promise<Client> {
   return client;
 }
 
-function textOf(res: { content?: unknown }): string {
-  const content = res.content as Array<{ type: string; text?: string }> | undefined;
+function textOf(res: unknown): string {
+  const content = (res as { content?: unknown }).content as
+    | Array<{ type: string; text?: string }>
+    | undefined;
   return content?.find((b) => b.type === "text")?.text ?? "";
 }
 

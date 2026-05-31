@@ -1,0 +1,8 @@
+{
+  // Build config: same options as tsconfig.json, but excludes test files so they
+  // never land in dist/. The base tsconfig.json (no exclude) is what `tsc --noEmit`
+  // and the editor use, so tests ARE type-checked and get node types (e.g. `process`).
+  "extends": "./tsconfig.json",
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}
