@@ -1,9 +1,1 @@
-# GitHub Linguist の言語統計を「実ソース（TypeScript）」だけに揃えるための上書き。
-# https://github.com/github-linguist/linguist/blob/main/docs/overrides.md
-#
-# 設定ファイルは JS で書かれていても「プロジェクトの言語」ではないので、
-# 言語バーの集計対象から外す（= TypeScript 100% 表示に近づける）。
 eslint.config.js linguist-detectable=false
-
-# package-lock.json は Linguist が自動で generated 扱いにするので明示は不要だが、
-# 将来 config 系の .js が増えたらここに足す方針。
