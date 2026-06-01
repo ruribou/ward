@@ -44,7 +44,12 @@ export function runOperation(op: Operation): Promise<ExecResult> {
           return;
         }
         const exitCode = typeof error.code === "number" ? error.code : 1;
-        resolve({ stdout: stdout ?? "", stderr: (stderr ?? "") + failureNote(error), exitCode, ms });
+        resolve({
+          stdout: stdout ?? "",
+          stderr: (stderr ?? "") + failureNote(error),
+          exitCode,
+          ms,
+        });
       },
     );
   });

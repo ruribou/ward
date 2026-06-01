@@ -64,7 +64,11 @@ describe("runOperation", () => {
   });
 
   it("flags a timeout (killed with SIGTERM) distinctly from a plain exit 1", async () => {
-    whenExecFile({ code: null, killed: true, signal: "SIGTERM", message: "timed out" }, "partial", "");
+    whenExecFile(
+      { code: null, killed: true, signal: "SIGTERM", message: "timed out" },
+      "partial",
+      "",
+    );
     const r = await runOperation(op);
     expect(r.exitCode).toBe(1);
     expect(r.stdout).toBe("partial");
