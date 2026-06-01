@@ -206,3 +206,62 @@ describe("isEntrypoint — recognises the bin even when installed as a symlink",
     expect(isEntrypoint(join(tmpdir(), "does-not-exist.js"), pathToFileURL(real).href)).toBe(false);
   });
 });
+
+describe("ward metrics — summarizing the audit log", () => {
+  const sampleLog = [
+    JSON.stringify({ ts: "t1", event: "executed", op: "nuc_disk", risk: "read-only", exitCode: 0 }),
+    JSON.stringify({
+      ts: "t2",
+      event: "proposed",
+      op: "nuc_pull",
+      risk: "mutating",
+      proposalId: "p1",
+    }),
+    JSON.stringify({
+      ts: "t3",
+      event: "executed",
+      op: "nuc_pull",
+      risk: "mutating",
+      proposalId: "p1",
+      exitCode: 0,
+    }),
+  ].join("\n");
+
+  it("reads a piped log from stdin when no path is given", async () => {
+    const cap = capture();
+    const code = await runCli(["metrics"], { out: cap.out, readStdin: () => sampleLog });
+    expect(code).toBe(0);
+    expect(cap.text()).toContain("ward metrics — 3 events");
+    expect(cap.text()).toContain("Human-intervention rate");
+  });
+
+  it("reads the log from an explicit path argument", async () => {
+    const cap = capture();
+    const code = await runCli(["metrics", "/some/audit.log"], {
+      out: cap.out,
+      readFile: (p) => (p === "/some/audit.log" ? sampleLog : ""),
+    });
+    expect(code).toBe(0);
+    expect(cap.text()).toContain("mutating executions  1");
+  });
+
+  it("emits machine-readable JSON with --json", async () => {
+    const cap = capture();
+    const code = await runCli(["metrics", "--json"], { out: cap.out, readStdin: () => sampleLog });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(cap.text());
+    expect(parsed.counts).toMatchObject({ proposed: 1, executed: 2, executedMutating: 1 });
+  });
+
+  it("returns 1 with a clear message when the source cannot be read", async () => {
+    const cap = capture();
+    const code = await runCli(["metrics", "/nope.log"], {
+      out: cap.out,
+      readFile: () => {
+        throw new Error("ENOENT");
+      },
+    });
+    expect(code).toBe(1);
+    expect(cap.text()).toContain("cannot read");
+  });
+});
