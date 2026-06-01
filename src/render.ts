@@ -11,7 +11,12 @@ import type { ExecResult, Locale, Operation } from "./types.js";
 /** Render an execution result as the text block the model/human sees. */
 export function formatResult(op: Operation, result: ExecResult): string {
   const header = `$ ${op.command.join(" ")}  (exit ${result.exitCode}, ${result.ms}ms)`;
-  const body = result.stdout.trim() || result.stderr.trim() || "(no output)";
+  const out = result.stdout.trim();
+  const err = result.stderr.trim();
+  // Never drop stderr: a non-zero exit's reason often lives only there, and
+  // tools like `docker pull` emit progress/warnings to stderr even on success.
+  const body =
+    out !== "" && err !== "" ? `stdout:\n${out}\n\nstderr:\n${err}` : out || err || "(no output)";
   return `${header}\n\n${body}`;
 }
 
