@@ -27,7 +27,10 @@ function textOf(res: unknown): string {
 /** A small registry with a mutating op, pinned so gate tests don't depend on the real one. */
 const fakeRegistry: readonly Operation[] = [
   { name: "nuc_disk", risk: "read-only", command: ["df", "-h"] },
+  // No plan description and no precheck → its proposal carries no plan block.
   { name: "nuc_reboot", risk: "mutating", command: ["sudo", "reboot"] },
+  // A precheck but no i18n plan description → only the precheck line is shown.
+  { name: "nuc_probe", risk: "mutating", command: ["touch", "marker"], precheck: ["ls", "marker"] },
 ];
 
 describe("ward MCP server (in-memory)", () => {
@@ -215,5 +218,60 @@ describe("ward MCP server — approval gate (in-memory)", () => {
     const res = await client.callTool({ name: "nuc_disk", arguments: {} });
     expect(runOperation).toHaveBeenCalledOnce();
     expect(textOf(res)).toContain("USED 6%");
+  });
+});
+
+describe("ward MCP server — plan preview before approval (in-memory)", () => {
+  it("shows the effect description and precheck in a real mutating op's proposal", async () => {
+    const runOperation = vi.fn(async () => fakeResult());
+    const client = await connect({ autonomy: "approval", runOperation, audit: () => {} });
+
+    const res = await client.callTool({ name: "nuc_pull", arguments: {} });
+    const text = textOf(res);
+    expect(text).toContain("Plan:");
+    expect(text).toContain("hello-world image"); // from the en plan description
+    expect(text).toContain("Verify first (read-only): $ docker images hello-world");
+    // The plan never runs the precheck — propose stays pure (nothing touches the NUC).
+    expect(runOperation).not.toHaveBeenCalled();
+  });
+
+  it("renders the plan in the configured locale (ja)", async () => {
+    const client = await connect({
+      autonomy: "approval",
+      lang: "ja",
+      runOperation: async () => fakeResult(),
+      audit: () => {},
+    });
+
+    const text = textOf(await client.callTool({ name: "nuc_pull", arguments: {} }));
+    expect(text).toContain("plan:");
+    expect(text).toContain("ローカル Docker イメージストアに追加"); // from the ja plan description
+    expect(text).toContain("先に確認（read-only）: $ docker images hello-world");
+  });
+
+  it("shows just the precheck line when an op has a precheck but no description", async () => {
+    const client = await connect({
+      autonomy: "approval",
+      operations: fakeRegistry,
+      runOperation: async () => fakeResult(),
+      audit: () => {},
+    });
+
+    const text = textOf(await client.callTool({ name: "nuc_probe", arguments: {} }));
+    expect(text).toContain("Verify first (read-only): $ ls marker");
+    expect(text).not.toContain("Plan:");
+  });
+
+  it("omits the plan block for a mutating op with neither a description nor a precheck", async () => {
+    const client = await connect({
+      autonomy: "approval",
+      operations: fakeRegistry,
+      runOperation: async () => fakeResult(),
+      audit: () => {},
+    });
+
+    const text = textOf(await client.callTool({ name: "nuc_reboot", arguments: {} }));
+    expect(text).not.toContain("Plan:");
+    expect(text).not.toContain("Verify first");
   });
 });

@@ -34,7 +34,9 @@ operations:
   - name: nuc_pull
     risk: mutating
     command: [docker, pull, hello-world]
+    precheck: [docker, images, hello-world]
 
   - name: nuc_rmi
     risk: mutating
     command: [docker, rmi, hello-world]
+    precheck: [docker, images, hello-world]

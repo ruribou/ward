@@ -26,6 +26,14 @@ export interface Operation {
    * so there is no command/argument injection surface.
    */
   readonly command: readonly string[];
+  /**
+   * Optional read-only probe surfaced in a mutating op's proposal so the human
+   * can verify current state before approving — half of the "plan" preview (the
+   * other half is the effect description in i18n under `ops.<name>.plan`). Same
+   * argv shape and charset as `command`, validated identically by the loader, and
+   * only ever shown in the propose path — ward does not run it for you.
+   */
+  readonly precheck?: readonly string[];
 }
 
 /** Result of executing an operation against the substrate. */

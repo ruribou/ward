@@ -30,6 +30,31 @@ function formatResult(op: Operation, result: ExecResult): string {
 }
 
 /**
+ * Build the "plan" block shown with a proposal so the human can approve an
+ * *informed* write, not just a command string (CONCEPT Phase 2 dry-run/plan).
+ * It combines two optional, separately-sourced parts:
+ * - a human-readable effect description from i18n (`ops.<name>.plan`), and
+ * - a read-only precheck the approver can run to verify current state first
+ *   (`op.precheck` — shown as a suggested command; ward does not run it).
+ *
+ * Returns "" when an op declares neither, so the notice is unchanged for ops
+ * without a plan. The leading/trailing newlines space the block off from the
+ * command and approval lines around the `{plan}` slot in proposal.notice.
+ */
+function buildPlan(op: Operation, lang: Locale): string {
+  const lines: string[] = [];
+  const description = getLabelOr(`ops.${op.name}.plan`, "", lang);
+  if (description !== "") {
+    lines.push(getLabel("proposal.plan", lang, { description }));
+  }
+  const precheck = op.precheck;
+  if (precheck !== undefined && precheck.length > 0) {
+    lines.push(getLabel("proposal.precheck", lang, { precheck: precheck.join(" ") }));
+  }
+  return lines.length === 0 ? "" : `\n${lines.join("\n")}\n`;
+}
+
+/**
  * Builds the ward MCP server: one tool per operation in the registry. Tool
  * titles/descriptions and the approval-gate messages are resolved from i18n for
  * the active locale (deps.lang, falling back to config.lang).
@@ -74,6 +99,7 @@ export function createServer(deps: Partial<ServerDeps> = {}): McpServer {
           risk: op.risk,
           command: op.command.join(" "),
           host: config.sshHost,
+          plan: buildPlan(op, lang),
         });
         return { content: [{ type: "text", text }] };
       }

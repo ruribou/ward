@@ -45,6 +45,15 @@ describe("operations registry", () => {
       }
     }
   });
+
+  it("gives every mutating op a plan: an effect description (both locales) and a precheck", () => {
+    for (const op of operations.filter((o) => o.risk === "mutating")) {
+      for (const locale of LOCALES) {
+        expect(getLabel(`ops.${op.name}.plan`, locale).length).toBeGreaterThan(0);
+      }
+      expect(op.precheck?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("parseOperations (the loader guardrail)", () => {
@@ -102,5 +111,42 @@ operations:
   - { name: nuc_uptime, risk: read-only, command: [uptime] }
 `;
     expect(() => parseOperations(yaml)).toThrow(/duplicate/);
+  });
+
+  it("loads an optional precheck and validates it like command", () => {
+    const yaml = `
+operations:
+  - name: nuc_pull
+    risk: mutating
+    command: [docker, pull, hello-world]
+    precheck: [docker, images, hello-world]
+`;
+    expect(parseOperations(yaml)[0]?.precheck).toEqual(["docker", "images", "hello-world"]);
+  });
+
+  it("treats precheck as optional (absent leaves it undefined)", () => {
+    expect(parseOperations(valid)[0]?.precheck).toBeUndefined();
+  });
+
+  it("rejects a precheck with a shell metacharacter (same guard as command)", () => {
+    const yaml = `
+operations:
+  - name: nuc_pull
+    risk: mutating
+    command: [docker, pull, hello-world]
+    precheck: [sh, -c, "rm -rf /"]
+`;
+    expect(() => parseOperations(yaml)).toThrow(/precheck has an unsafe argument/);
+  });
+
+  it("rejects an empty precheck array", () => {
+    const yaml = `
+operations:
+  - name: nuc_pull
+    risk: mutating
+    command: [docker, pull, hello-world]
+    precheck: []
+`;
+    expect(() => parseOperations(yaml)).toThrow(/precheck must be a non-empty array/);
   });
 });

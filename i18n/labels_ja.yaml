@@ -26,9 +26,11 @@ ops:
   nuc_pull:
     title: イメージ取得
     description: NUC に Docker イメージ hello-world を取得する（docker pull）。NUC のディスク状態を変える書き込み操作——承認が要る。取得結果は nuc_images で確認できる。
+    plan: hello-world イメージを NUC のローカル Docker イメージストアに追加する。既にあれば更新のみで他は変わらない。nuc_rmi で巻き戻せる。
   nuc_rmi:
     title: イメージ削除
     description: NUC から Docker イメージ hello-world を削除する（docker rmi）。nuc_pull の逆＝巻き戻し操作。書き込み操作——承認が要る。
+    plan: hello-world イメージを NUC のローカル Docker イメージストアから削除する。無ければ何も起きない（no-op）。nuc_pull で巻き戻せる。
 approve:
   title: 提案を承認して実行
   description: "保留中の変更操作（提案）を、その id を指定して承認・実行する。id は変更系ツールが返した提案 id（例: p1）。これは人間の承認ステップ——存在しない／使用済みの id は拒否される。"
@@ -37,5 +39,7 @@ proposal:
   notice: |-
     提案 {id} — この操作は NUC を変更します（risk: {risk}）。承認するまで実行されません。
     $ {command}  on {host}
-
+    {plan}
     実行するには ward_approve を id="{id}" で呼び出してください。
+  plan: "plan: {description}"
+  precheck: "先に確認（read-only）: $ {precheck}"
