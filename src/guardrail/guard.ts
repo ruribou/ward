@@ -41,7 +41,6 @@ export function guard(op: Operation, level: AutonomyLevel = config.autonomy): Gu
   if (op.risk === "read-only") {
     return "allow";
   }
-  // op.risk === "mutating"
   if (level === "approval") {
     return "require-approval";
   }

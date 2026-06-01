@@ -21,7 +21,7 @@ describe("ProposalStore", () => {
     const store = new ProposalStore();
     const { id } = store.create(op);
     expect(store.get(id)?.op).toBe(op);
-    expect(store.get(id)?.op).toBe(op); // still there on a second look
+    expect(store.get(id)?.op).toBe(op);
   });
 
   it("returns null from get for an unknown id", () => {
@@ -32,7 +32,7 @@ describe("ProposalStore", () => {
     const store = new ProposalStore();
     const { id } = store.create(op);
     expect(store.consume(id)?.op).toBe(op);
-    expect(store.consume(id)).toBeNull(); // already consumed
+    expect(store.consume(id)).toBeNull();
   });
 
   it("consume rejects an unknown id", () => {
@@ -41,10 +41,10 @@ describe("ProposalStore", () => {
 
   it("consume rejects a malformed id without throwing, leaving real proposals intact", () => {
     const store = new ProposalStore();
-    store.create(op); // p1
+    store.create(op);
     for (const bad of ["../etc", "p1; rm -rf /", "", "P1", "1"]) {
       expect(store.consume(bad)).toBeNull();
     }
-    expect(store.consume("p1")?.op).toBe(op); // untouched by the malformed attempts
+    expect(store.consume("p1")?.op).toBe(op);
   });
 });
