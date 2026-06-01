@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { audit as defaultAudit } from "./guardrail/audit.js";
 import { ProposalStore } from "./guardrail/proposals.js";
@@ -88,7 +89,24 @@ export async function runCli(argv: string[], deps: Partial<CliDeps> = {}): Promi
   }
 }
 
-// Auto-run only when invoked as the `ward` binary, not when imported by a test.
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * Was this module invoked directly as the entry (the `ward` binary), rather than
+ * imported by a test? `npm`/`nodebrew` install the bin as a SYMLINK to dist/cli.js,
+ * so process.argv[1] is the symlink path while import.meta.url is the resolved real
+ * path — a plain string compare misses, and the CLI would silently do nothing.
+ * Resolving both with realpath makes the symlinked bin match.
+ */
+export function isEntrypoint(argv1: string | undefined, moduleUrl: string): boolean {
+  if (argv1 === undefined) {
+    return false;
+  }
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntrypoint(process.argv[1], import.meta.url)) {
   process.exit(await runCli(process.argv.slice(2)));
 }

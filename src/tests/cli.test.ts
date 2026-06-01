@@ -1,10 +1,11 @@
-import { rmSync } from "node:fs";
+import { rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { runCli } from "../cli.js";
+import { isEntrypoint, runCli } from "../cli.js";
 import { ProposalStore } from "../guardrail/proposals.js";
 import { createServer } from "../server.js";
 import type { ExecResult, Operation } from "../types.js";
@@ -170,5 +171,38 @@ describe("end to end — AI proposes via MCP, human approves via CLI (shared sto
     expect(serverRun).not.toHaveBeenCalled(); // the AI's surface never did
     expect(cap.text()).toContain("docker pull hello-world");
     expect(cap.text()).toContain("Downloaded hello-world");
+  });
+});
+
+describe("isEntrypoint — recognises the bin even when installed as a symlink", () => {
+  // npm/nodebrew install `ward` as a symlink to dist/cli.js; the entry check must
+  // resolve symlinks or the CLI silently does nothing (regression from #29).
+  let real: string;
+  let link: string;
+
+  beforeEach(() => {
+    real = join(tmpdir(), `ward-entry-real-${process.pid}-${counter}.js`);
+    link = join(tmpdir(), `ward-entry-link-${process.pid}-${counter}.js`);
+    writeFileSync(real, "// entry stub\n");
+    symlinkSync(real, link);
+  });
+
+  afterEach(() => {
+    rmSync(link, { force: true });
+    rmSync(real, { force: true });
+  });
+
+  it("matches when argv[1] is a symlink to the real module", () => {
+    expect(isEntrypoint(link, pathToFileURL(real).href)).toBe(true);
+  });
+
+  it("matches when argv[1] is the real path itself", () => {
+    expect(isEntrypoint(real, pathToFileURL(real).href)).toBe(true);
+  });
+
+  it("does not match an unrelated path, undefined, or a nonexistent path", () => {
+    expect(isEntrypoint(tmpdir(), pathToFileURL(real).href)).toBe(false);
+    expect(isEntrypoint(undefined, pathToFileURL(real).href)).toBe(false);
+    expect(isEntrypoint(join(tmpdir(), "does-not-exist.js"), pathToFileURL(real).href)).toBe(false);
   });
 });
