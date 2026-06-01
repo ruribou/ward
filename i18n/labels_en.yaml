@@ -45,9 +45,12 @@ cli:
   noPending: No pending proposals.
   pendingHeader: "Pending proposals (approve one with: ward approve <id>):"
   discarded: 'ward: discarded proposal "{id}".'
+  metricsNoSource: "ward metrics: give a log path, set WARD_AUDIT_LOG, or pipe a log on stdin."
+  metricsReadFailed: 'ward metrics: cannot read "{source}" — {error}'
   usage: |-
     ward — human approval for pending infrastructure changes proposed by the AI.
     Usage:
       ward list             show pending proposals (and their plan)
       ward approve <id>     approve and run a pending proposal
       ward reject <id>      discard a pending proposal without running it
+      ward metrics [path]   summarize the audit log (success / intervention / blast radius)

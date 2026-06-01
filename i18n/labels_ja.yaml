@@ -45,9 +45,12 @@ cli:
   noPending: 保留中の提案はありません。
   pendingHeader: "保留中の提案（承認は: ward approve <id>）:"
   discarded: 'ward: 提案 "{id}" を破棄しました。'
+  metricsNoSource: "ward metrics: ログのパスを渡すか、WARD_AUDIT_LOG を設定するか、stdin にログを流してください。"
+  metricsReadFailed: 'ward metrics: "{source}" を読めません — {error}'
   usage: |-
     ward — AI が提案したインフラ変更を、人間が承認するためのコマンド。
     使い方:
       ward list             保留中の提案（と plan）を表示
       ward approve <id>     保留中の提案を承認して実行
       ward reject <id>      提案を実行せずに破棄
+      ward metrics [path]   監査ログを集計（成功率 / 介入率 / blast radius）

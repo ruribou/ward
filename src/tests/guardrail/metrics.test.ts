@@ -1,0 +1,138 @@
+import { describe, expect, it } from "vitest";
+import { formatMetrics, parseAuditLog, summarize } from "../../guardrail/metrics.js";
+
+/** Build one audit JSON line, matching the shape `audit.ts` serializes. */
+function line(fields: Record<string, unknown>): string {
+  return JSON.stringify(fields);
+}
+
+const RO = (op: string, exitCode: number, ts: string) =>
+  line({ ts, event: "executed", op, risk: "read-only", exitCode, ms: 5 });
+const PROPOSE = (op: string, proposalId: string, ts: string) =>
+  line({ ts, event: "proposed", op, risk: "mutating", proposalId });
+const EXEC = (op: string, proposalId: string, exitCode: number, ts: string) =>
+  line({ ts, event: "executed", op, risk: "mutating", proposalId, exitCode, ms: 10 });
+
+const log = [
+  RO("nuc_disk", 0, "2026-06-01T10:00:00Z"),
+  RO("nuc_disk", 0, "2026-06-01T10:01:00Z"),
+  RO("nuc_memory", 1, "2026-06-01T10:02:00Z"),
+  PROPOSE("nuc_pull", "p1", "2026-06-01T10:03:00Z"),
+  EXEC("nuc_pull", "p1", 0, "2026-06-01T10:04:00Z"),
+  PROPOSE("nuc_pull", "p2", "2026-06-01T10:05:00Z"),
+  EXEC("nuc_pull", "p2", 0, "2026-06-01T10:06:00Z"),
+  PROPOSE("nuc_rmi", "p3", "2026-06-01T10:07:00Z"),
+  EXEC("nuc_rmi", "p3", 1, "2026-06-01T10:08:00Z"),
+  PROPOSE("nuc_reboot", "p4", "2026-06-01T10:09:00Z"),
+].join("\n");
+
+describe("parseAuditLog", () => {
+  it("skips blank lines without counting them, and counts unparseable / non-event lines", () => {
+    const text = [
+      "",
+      RO("nuc_disk", 0, "2026-06-01T10:00:00Z"),
+      "{ not json",
+      line({ ts: "t", event: "audit-write-failed", auditLog: "/x", error: "e" }),
+      line({ event: "executed" }), // missing op/risk/ts
+      "   ",
+    ].join("\n");
+    const { events, skipped } = parseAuditLog(text);
+    expect(events).toHaveLength(1);
+    expect(skipped).toBe(3);
+  });
+
+  it("recognises proposed and executed events", () => {
+    const { events } = parseAuditLog(log);
+    expect(events).toHaveLength(10);
+  });
+});
+
+describe("summarize", () => {
+  const m = summarize(parseAuditLog(log));
+
+  it("counts events by class", () => {
+    expect(m.counts).toEqual({
+      proposed: 4,
+      executed: 6,
+      executedReadOnly: 3,
+      executedMutating: 3,
+    });
+  });
+
+  it("computes success rate overall and for mutating only", () => {
+    expect(m.successRate.overall).toMatchObject({ numerator: 4, denominator: 6 });
+    expect(m.successRate.mutating).toMatchObject({ numerator: 2, denominator: 3 });
+  });
+
+  it("intervention rate = proposed / (proposed + read-only executed)", () => {
+    expect(m.interventionRate).toMatchObject({ numerator: 4, denominator: 7 });
+  });
+
+  it("approval-through rate = mutating executed / proposed", () => {
+    expect(m.approvalThroughRate).toMatchObject({ numerator: 3, denominator: 4 });
+  });
+
+  it("blast radius counts realised mutating executions by op", () => {
+    expect(m.blastRadius.mutatingExecutions).toBe(3);
+    expect(m.blastRadius.byOp).toEqual({ nuc_pull: 2, nuc_rmi: 1 });
+    expect(m.blastRadius.reversibility).toBe("unknown");
+  });
+
+  it("per-op breakdown counts proposed/executed/ok/failed, sorted by name", () => {
+    expect(m.perOp.map((s) => s.op)).toEqual([
+      "nuc_disk",
+      "nuc_memory",
+      "nuc_pull",
+      "nuc_reboot",
+      "nuc_rmi",
+    ]);
+    expect(m.perOp.find((s) => s.op === "nuc_rmi")).toEqual({
+      op: "nuc_rmi",
+      risk: "mutating",
+      proposed: 1,
+      executed: 1,
+      ok: 0,
+      failed: 1,
+    });
+    expect(m.perOp.find((s) => s.op === "nuc_reboot")).toMatchObject({
+      proposed: 1,
+      executed: 0,
+    });
+  });
+
+  it("reports the time window and event count", () => {
+    expect(m.window).toEqual({
+      from: "2026-06-01T10:00:00Z",
+      to: "2026-06-01T10:09:00Z",
+      events: 10,
+      skipped: 0,
+    });
+  });
+
+  it("guards divide-by-zero with null rates on an empty log", () => {
+    const empty = summarize(parseAuditLog(""));
+    expect(empty.window.events).toBe(0);
+    expect(empty.window.from).toBeNull();
+    expect(empty.successRate.overall.value).toBeNull();
+    expect(empty.interventionRate.value).toBeNull();
+    expect(empty.approvalThroughRate.value).toBeNull();
+  });
+});
+
+describe("formatMetrics", () => {
+  it("renders the headline sections and the honest limitations", () => {
+    const report = formatMetrics(summarize(parseAuditLog(log)));
+    expect(report).toContain("ward metrics — 10 events");
+    expect(report).toContain("Success rate");
+    expect(report).toContain("Human-intervention rate");
+    expect(report).toContain("Approval-through rate");
+    expect(report).toContain("`ward reject` emits no audit event");
+    expect(report).toContain("Blast radius");
+    expect(report).toContain("reversibility: unknown (pending #18)");
+    expect(report).toContain("57.1%"); // intervention rate 4/7
+  });
+
+  it("says 'no events' for an empty log", () => {
+    expect(formatMetrics(summarize(parseAuditLog("")))).toContain("no events");
+  });
+});

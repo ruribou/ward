@@ -60,7 +60,8 @@ guarantees come from structure, not trust:
   a shell), and the model supplies _no part_ of the command — not even an argument.
   There is no string for it to inject into.
 - **An append-only audit trail.** What was proposed and what was executed is recorded so
-  every action stays reviewable and reversible.
+  every action stays reviewable and reversible. `ward metrics` summarizes that trail into
+  the guardrail numbers — success rate, human-intervention rate, and blast radius.
 
 ## Autonomy ladder
 

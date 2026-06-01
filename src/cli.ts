@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { audit as defaultAudit } from "./guardrail/audit.js";
+import { formatMetrics, parseAuditLog, summarize } from "./guardrail/metrics.js";
 import { ProposalStore } from "./guardrail/proposals.js";
 import { getLabel } from "./i18n/index.js";
 import { buildPlan, formatResult } from "./render.js";
@@ -26,6 +27,10 @@ export interface CliDeps {
   lang: Locale;
   /** Sink for output lines; injected so tests can capture without touching stdout. */
   out: (line: string) => void;
+  /** Reads an audit log file; injected so the metrics summarizer is testable without disk. */
+  readFile: (path: string) => string;
+  /** Reads a piped audit log from stdin; injected for tests. */
+  readStdin: () => string;
 }
 
 /** Run one `ward` invocation. Returns the process exit code. */
@@ -35,6 +40,8 @@ export async function runCli(argv: string[], deps: Partial<CliDeps> = {}): Promi
   const out = deps.out ?? ((line: string) => process.stdout.write(`${line}\n`));
   const runOperation = deps.runOperation ?? defaultRunOperation;
   const audit = deps.audit ?? defaultAudit;
+  const readFile = deps.readFile ?? ((path: string) => readFileSync(path, "utf8"));
+  const readStdin = deps.readStdin ?? (() => readFileSync(0, "utf8"));
 
   const [command, id] = argv;
 
@@ -80,6 +87,31 @@ export async function runCli(argv: string[], deps: Partial<CliDeps> = {}): Promi
         return 1;
       }
       out(getLabel("cli.discarded", lang, { id }));
+      return 0;
+    }
+
+    case "metrics": {
+      const rest = argv.slice(1);
+      const json = rest.includes("--json");
+      const source = rest.find((arg) => !arg.startsWith("-")) ?? config.auditLog;
+      if (source === undefined && deps.readStdin === undefined && process.stdin.isTTY === true) {
+        out(getLabel("cli.metricsNoSource", lang));
+        return 2;
+      }
+      let text: string;
+      try {
+        text = source === undefined ? readStdin() : readFile(source);
+      } catch (err) {
+        out(
+          getLabel("cli.metricsReadFailed", lang, {
+            source: source ?? "<stdin>",
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+        return 1;
+      }
+      const metrics = summarize(parseAuditLog(text));
+      out(json ? JSON.stringify(metrics) : formatMetrics(metrics));
       return 0;
     }
 
