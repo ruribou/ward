@@ -12,6 +12,8 @@ const PROPOSE = (op: string, proposalId: string, ts: string) =>
   line({ ts, event: "proposed", op, risk: "mutating", proposalId });
 const EXEC = (op: string, proposalId: string, exitCode: number, ts: string) =>
   line({ ts, event: "executed", op, risk: "mutating", proposalId, exitCode, ms: 10 });
+const REJECT = (op: string, proposalId: string, ts: string) =>
+  line({ ts, event: "rejected", op, risk: "mutating", proposalId });
 
 const log = [
   RO("nuc_disk", 0, "2026-06-01T10:00:00Z"),
@@ -56,6 +58,7 @@ describe("summarize", () => {
       executed: 6,
       executedReadOnly: 3,
       executedMutating: 3,
+      rejected: 0,
     });
   });
 
@@ -70,6 +73,24 @@ describe("summarize", () => {
 
   it("approval-through rate = mutating executed / proposed", () => {
     expect(m.approvalThroughRate).toMatchObject({ numerator: 3, denominator: 4 });
+  });
+
+  it("resolves proposals into approved / rejected / pending (pending when neither)", () => {
+    // log has 4 proposed, 3 executed-mutating, 0 rejected → 1 still pending (p4).
+    expect(m.resolution).toEqual({ approved: 3, rejected: 0, pending: 1 });
+  });
+
+  it("counts rejections and folds them into the resolution", () => {
+    const withReject = summarize(
+      parseAuditLog([log, REJECT("nuc_reboot", "p4", "2026-06-01T10:10:00Z")].join("\n")),
+    );
+    expect(withReject.counts.rejected).toBe(1);
+    expect(withReject.resolution).toEqual({ approved: 3, rejected: 1, pending: 0 });
+    expect(withReject.perOp.find((s) => s.op === "nuc_reboot")).toMatchObject({
+      proposed: 1,
+      executed: 0,
+      rejected: 1,
+    });
   });
 
   it("blast radius counts realised mutating executions by op", () => {
@@ -93,6 +114,7 @@ describe("summarize", () => {
       executed: 1,
       ok: 0,
       failed: 1,
+      rejected: 0,
     });
     expect(m.perOp.find((s) => s.op === "nuc_reboot")).toMatchObject({
       proposed: 1,
@@ -120,13 +142,14 @@ describe("summarize", () => {
 });
 
 describe("formatMetrics", () => {
-  it("renders the headline sections and the honest limitations", () => {
+  it("renders the headline sections including the proposal resolution", () => {
     const report = formatMetrics(summarize(parseAuditLog(log)));
     expect(report).toContain("ward metrics — 10 events");
     expect(report).toContain("Success rate");
     expect(report).toContain("Human-intervention rate");
-    expect(report).toContain("Approval-through rate");
-    expect(report).toContain("`ward reject` emits no audit event");
+    expect(report).toContain("Proposal resolution (4 proposed)");
+    expect(report).toContain("rejected");
+    expect(report).toContain("pending");
     expect(report).toContain("Blast radius");
     expect(report).toContain("reversibility: unknown (pending #18)");
     expect(report).toContain("57.1%"); // intervention rate 4/7

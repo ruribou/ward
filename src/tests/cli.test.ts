@@ -114,13 +114,22 @@ describe("ward CLI — the human's out-of-band approval surface", () => {
     expect(cap.text()).toContain("ward approve <id>");
   });
 
-  it("reject discards a proposal so it can never run", async () => {
+  it("reject discards a proposal so it can never run, and records a rejected audit event", async () => {
     const proposals = new ProposalStore(path);
     const { id } = proposals.create(op);
     const runOperation = vi.fn(async () => fakeResult());
+    const audit = vi.fn();
 
-    const rejectCode = await runCli(["reject", id], { proposals, runOperation, out: () => {} });
+    const rejectCode = await runCli(["reject", id], {
+      proposals,
+      runOperation,
+      audit,
+      out: () => {},
+    });
     expect(rejectCode).toBe(0);
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "rejected", proposalId: "p1" }),
+    );
 
     const approveCode = await runCli(["approve", id], {
       proposals: new ProposalStore(path),
@@ -129,6 +138,17 @@ describe("ward CLI — the human's out-of-band approval surface", () => {
     });
     expect(approveCode).toBe(1); // already gone
     expect(runOperation).not.toHaveBeenCalled();
+  });
+
+  it("reject of an unknown id records no audit event", async () => {
+    const audit = vi.fn();
+    const code = await runCli(["reject", "p999"], {
+      proposals: new ProposalStore(path),
+      audit,
+      out: () => {},
+    });
+    expect(code).toBe(1);
+    expect(audit).not.toHaveBeenCalled();
   });
 
   it("an unknown command prints usage and exits 2", async () => {

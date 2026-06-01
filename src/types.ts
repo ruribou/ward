@@ -78,15 +78,19 @@ export interface Proposal {
 }
 
 /**
- * One entry in the audit trail. Every operation leaves a trace; mutating ones
- * leave two — a "proposed" event and, once approved, an "executed" event — so
- * the record shows both what was asked for and what actually ran.
+ * One entry in the audit trail. Every operation leaves a trace; a mutating one
+ * leaves a "proposed" event and then exactly one resolution — an "executed" event
+ * once approved, or a "rejected" event if a human discards it — so the record
+ * shows both what was asked for and how it was resolved.
  */
 export interface AuditEntry {
-  /** "proposed" = gated, awaiting approval; "executed" = the command actually ran. */
-  readonly event: "proposed" | "executed";
+  /**
+   * "proposed" = gated, awaiting approval; "executed" = the command actually ran;
+   * "rejected" = a human discarded the proposal without running it.
+   */
+  readonly event: "proposed" | "executed" | "rejected";
   readonly op: Operation;
-  /** Set for proposed events and for executions that came from an approval. */
+  /** Set for proposed events and for the execution/rejection that resolves them. */
   readonly proposalId?: string;
   /** Set only for "executed" events. */
   readonly result?: ExecResult;

@@ -3,20 +3,23 @@ import type { RiskClass } from "../types.js";
 /**
  * Measurement layer (CONCEPT RQ4): turn the audit stream into the numbers that
  * tell us how the guardrails are doing — success rate, human-intervention rate,
- * and blast radius. It only *reads* what `audit.ts` already wrote (metadata, never
- * command output), so this stays a pure, side-effect-free summarizer: feed it the
- * log text, get a report. That keeps the privacy stance intact and the metrics
- * reproducible — the same log always yields the same numbers.
+ * proposal resolution (approved / rejected / pending), and blast radius. It only
+ * *reads* what `audit.ts` already wrote (metadata, never command output), so this
+ * stays a pure, side-effect-free summarizer: feed it the log text, get a report.
+ * That keeps the privacy stance intact and the metrics reproducible — the same
+ * log always yields the same numbers.
  *
- * What the stream can and cannot tell us is deliberately explicit (see below):
- * rejections emit no audit event, and reversibility is not yet recorded (#18), so
- * the report names those gaps rather than hiding them behind a number.
+ * Counts, not id-pairing: resolution is derived from event counts (proposed minus
+ * approved minus rejected = pending), so it does not rely on proposal ids being a
+ * stable global key — which they are not (the short `p1`-style handle resets when
+ * the proposal store is cleared, while the audit log lives on). Reversibility is
+ * not yet recorded (#18), so the report names that gap rather than hiding it.
  */
 
 /** One serialized audit line, as written by `audit.ts`'s `serialize()`. */
 export interface LoggedEvent {
   readonly ts: string;
-  readonly event: "proposed" | "executed";
+  readonly event: "proposed" | "executed" | "rejected";
   readonly op: string;
   readonly risk: RiskClass;
   readonly proposalId?: string;
@@ -26,7 +29,7 @@ export interface LoggedEvent {
 
 export interface ParseResult {
   readonly events: LoggedEvent[];
-  /** Non-empty lines that were not a recognisable proposed/executed event (e.g. audit-write-failed, malformed). */
+  /** Non-empty lines that were not a recognisable audit event (e.g. audit-write-failed, malformed). */
   readonly skipped: number;
 }
 
@@ -45,6 +48,14 @@ export interface OpStat {
   readonly executed: number;
   readonly ok: number;
   readonly failed: number;
+  readonly rejected: number;
+}
+
+/** How the proposed mutations were resolved (counts always sum to `proposed`). */
+export interface Resolution {
+  readonly approved: number;
+  readonly rejected: number;
+  readonly pending: number;
 }
 
 export interface Metrics {
@@ -59,12 +70,15 @@ export interface Metrics {
     readonly executed: number;
     readonly executedReadOnly: number;
     readonly executedMutating: number;
+    readonly rejected: number;
   };
   readonly successRate: { readonly overall: Ratio; readonly mutating: Ratio };
   /** proposed / (proposed + read-only executed): share of requested ops that needed a human gate. */
   readonly interventionRate: Ratio;
   /** mutating executed / proposed: share of proposed mutations that were approved and ran. */
   readonly approvalThroughRate: Ratio;
+  /** How proposed mutations were resolved: approved (ran) / rejected / still pending. */
+  readonly resolution: Resolution;
   readonly blastRadius: {
     readonly mutatingExecutions: number;
     readonly byOp: Record<string, number>;
@@ -81,6 +95,7 @@ interface MutableOpStat {
   executed: number;
   ok: number;
   failed: number;
+  rejected: number;
 }
 
 function ratio(numerator: number, denominator: number): Ratio {
@@ -93,7 +108,7 @@ function isLoggedEvent(value: unknown): value is LoggedEvent {
   }
   const v = value as Record<string, unknown>;
   return (
-    (v.event === "proposed" || v.event === "executed") &&
+    (v.event === "proposed" || v.event === "executed" || v.event === "rejected") &&
     typeof v.op === "string" &&
     (v.risk === "read-only" || v.risk === "mutating") &&
     typeof v.ts === "string"
@@ -101,7 +116,7 @@ function isLoggedEvent(value: unknown): value is LoggedEvent {
 }
 
 /**
- * Parse a WARD_AUDIT_LOG (JSON-lines) into proposed/executed events. Blank lines,
+ * Parse a WARD_AUDIT_LOG (JSON-lines) into proposed/executed/rejected events. Blank lines,
  * `audit-write-failed` self-reports, and any malformed line are skipped — and the
  * skipped count is returned so truncation is never silent.
  */
@@ -131,6 +146,7 @@ export function parseAuditLog(text: string): ParseResult {
 export function summarize({ events, skipped }: ParseResult): Metrics {
   const proposed = events.filter((e) => e.event === "proposed");
   const executed = events.filter((e) => e.event === "executed");
+  const rejected = events.filter((e) => e.event === "rejected");
   const executedReadOnly = executed.filter((e) => e.risk === "read-only");
   const executedMutating = executed.filter((e) => e.risk === "mutating");
   const ok = (list: LoggedEvent[]) => list.filter((e) => e.exitCode === 0).length;
@@ -141,7 +157,7 @@ export function summarize({ events, skipped }: ParseResult): Metrics {
   const stat = (op: string, risk: RiskClass): MutableOpStat => {
     let s = byOp.get(op);
     if (s === undefined) {
-      s = { op, risk, proposed: 0, executed: 0, ok: 0, failed: 0 };
+      s = { op, risk, proposed: 0, executed: 0, ok: 0, failed: 0, rejected: 0 };
       byOp.set(op, s);
     }
     return s;
@@ -157,6 +173,9 @@ export function summarize({ events, skipped }: ParseResult): Metrics {
     } else {
       s.failed += 1;
     }
+  }
+  for (const e of rejected) {
+    stat(e.op, e.risk).rejected += 1;
   }
 
   const blastByOp: Record<string, number> = {};
@@ -178,6 +197,7 @@ export function summarize({ events, skipped }: ParseResult): Metrics {
       executed: executed.length,
       executedReadOnly: executedReadOnly.length,
       executedMutating: executedMutating.length,
+      rejected: rejected.length,
     },
     successRate: {
       overall: ratio(ok(executed), executed.length),
@@ -185,6 +205,11 @@ export function summarize({ events, skipped }: ParseResult): Metrics {
     },
     interventionRate: ratio(proposed.length, proposed.length + executedReadOnly.length),
     approvalThroughRate: ratio(executedMutating.length, proposed.length),
+    resolution: {
+      approved: executedMutating.length,
+      rejected: rejected.length,
+      pending: Math.max(0, proposed.length - executedMutating.length - rejected.length),
+    },
     blastRadius: {
       mutatingExecutions: executedMutating.length,
       byOp: blastByOp,
@@ -242,11 +267,10 @@ export function formatMetrics(m: Metrics): string {
   );
 
   lines.push("");
-  lines.push("Approval-through rate");
-  lines.push(
-    `  ${frac(m.approvalThroughRate)}  ${pct(m.approvalThroughRate)}  (proposed mutations approved & ran)`,
-  );
-  lines.push("  note: rejected/pending not distinguished — `ward reject` emits no audit event");
+  lines.push(`Proposal resolution (${m.counts.proposed} proposed)`);
+  lines.push(`  approved & ran  ${pad(m.resolution.approved, 4)}  ${pct(m.approvalThroughRate)}`);
+  lines.push(`  rejected        ${pad(m.resolution.rejected, 4)}`);
+  lines.push(`  pending         ${pad(m.resolution.pending, 4)}`);
 
   lines.push("");
   lines.push("Blast radius (realised state changes)");
@@ -262,11 +286,11 @@ export function formatMetrics(m: Metrics): string {
     lines.push("");
     lines.push("Per operation");
     lines.push(
-      `  ${padEnd("op", 16)} ${padEnd("risk", 11)} ${pad("proposed", 8)} ${pad("executed", 8)} ${pad("ok", 4)} ${pad("failed", 6)}`,
+      `  ${padEnd("op", 16)} ${padEnd("risk", 11)} ${pad("proposed", 8)} ${pad("executed", 8)} ${pad("ok", 4)} ${pad("failed", 6)} ${pad("rejected", 8)}`,
     );
     for (const s of m.perOp) {
       lines.push(
-        `  ${padEnd(s.op, 16)} ${padEnd(s.risk, 11)} ${pad(s.proposed || "-", 8)} ${pad(s.executed, 8)} ${pad(s.ok, 4)} ${pad(s.failed, 6)}`,
+        `  ${padEnd(s.op, 16)} ${padEnd(s.risk, 11)} ${pad(s.proposed || "-", 8)} ${pad(s.executed, 8)} ${pad(s.ok, 4)} ${pad(s.failed, 6)} ${pad(s.rejected || "-", 8)}`,
       );
     }
   }

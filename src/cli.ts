@@ -86,6 +86,7 @@ export async function runCli(argv: string[], deps: Partial<CliDeps> = {}): Promi
         out(getLabel("cli.notFound", lang, { id }));
         return 1;
       }
+      audit({ event: "rejected", op: proposal.op, proposalId: proposal.id });
       out(getLabel("cli.discarded", lang, { id }));
       return 0;
     }
