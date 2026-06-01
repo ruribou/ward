@@ -1,17 +1,3 @@
-# ward operation registry — the single source of truth for "what ward can do".
-#
-# Add a capability by adding an entry here. This is a reviewable diff, not a code
-# change. The loader (src/operations.ts) validates every entry at startup and
-# REFUSES TO START if anything is unsafe, so by construction:
-#   - `command` is an argv array of constants (NO shell; run via execFile).
-#   - every argument matches [A-Za-z0-9_.-]+ — no spaces, no ; | $ ( ) ` etc.
-#   - the model never supplies any part of a command; it only chooses which to run.
-#   - `risk` is read-only or mutating. (M2 is still entirely read-only.)
-#
-# Tools that need an argument (e.g. `docker logs <name>`) are deliberately NOT
-# here yet: model-supplied input needs its own validation guardrail, which is a
-# later, separate step.
-
 operations:
   - name: nuc_uptime
     title: 稼働状況
