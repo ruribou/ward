@@ -1,4 +1,7 @@
-import type { AutonomyLevel } from "./types.js";
+import type { AutonomyLevel, Locale } from "./types.js";
+
+/** The locales ward ships text for — every label must exist in each (see i18n/). */
+export const LOCALES: readonly Locale[] = ["en", "ja"];
 
 /**
  * ward configuration. Intentionally holds NO secrets.
@@ -20,6 +23,12 @@ export const config = {
    */
   autonomy: parseAutonomy(process.env.WARD_AUTONOMY),
   /**
+   * UI language for tool titles/descriptions and approval messages. Override
+   * with WARD_LANG. Default "en" so the public registry is usable by the widest
+   * audience; set WARD_LANG=ja for Japanese.
+   */
+  lang: parseLang(process.env.WARD_LANG),
+  /**
    * Optional path for an append-only, reviewable audit log. Override with
    * WARD_AUDIT_LOG. Unset (the default) means audit lines go to stderr only.
    */
@@ -29,4 +38,9 @@ export const config = {
 /** Falls back to the safe "read-only" floor for anything unrecognized. */
 function parseAutonomy(raw: string | undefined): AutonomyLevel {
   return raw === "approval" ? "approval" : "read-only";
+}
+
+/** Falls back to English for anything other than an explicitly supported locale. */
+function parseLang(raw: string | undefined): Locale {
+  return raw === "ja" ? "ja" : "en";
 }

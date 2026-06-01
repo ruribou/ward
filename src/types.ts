@@ -8,14 +8,16 @@
  */
 export type RiskClass = "read-only" | "mutating";
 
-/** A single capability ward can perform against the substrate (the NUC). */
+/**
+ * A single capability ward can perform against the substrate (the NUC).
+ *
+ * Structure only — its human/LLM-facing title and description are not stored
+ * here. They live in i18n/labels_<locale>.yaml under `ops.<name>`, resolved for
+ * the active locale when the tool is registered.
+ */
 export interface Operation {
-  /** MCP tool name, e.g. "nuc_disk". */
+  /** MCP tool name, e.g. "nuc_disk". Also the i18n key for its title/description. */
   readonly name: string;
-  /** Short, human/LLM-facing title. */
-  readonly title: string;
-  /** Description the LLM uses to decide when to call this tool. */
-  readonly description: string;
   /** Risk classification — read by the guardrail gate before execution. */
   readonly risk: RiskClass;
   /**
@@ -34,6 +36,14 @@ export interface ExecResult {
   /** Wall-clock duration in milliseconds. */
   readonly ms: number;
 }
+
+/**
+ * UI language for human/LLM-facing text — operation titles and descriptions and
+ * the approval-gate messages. The strings live in i18n/labels_<locale>.yaml;
+ * this only selects which file the loader reads (WARD_LANG, English default).
+ * Adding a language is a new label file plus an entry here — no server change.
+ */
+export type Locale = "en" | "ja";
 
 /**
  * How much autonomy ward grants — the staged-autonomy dial (CONCEPT RQ2).

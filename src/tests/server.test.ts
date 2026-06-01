@@ -26,14 +26,8 @@ function textOf(res: unknown): string {
 
 /** A small registry with a mutating op, pinned so gate tests don't depend on the real one. */
 const fakeRegistry: readonly Operation[] = [
-  { name: "nuc_disk", title: "disk", description: "d", risk: "read-only", command: ["df", "-h"] },
-  {
-    name: "nuc_reboot",
-    title: "reboot",
-    description: "d",
-    risk: "mutating",
-    command: ["sudo", "reboot"],
-  },
+  { name: "nuc_disk", risk: "read-only", command: ["df", "-h"] },
+  { name: "nuc_reboot", risk: "mutating", command: ["sudo", "reboot"] },
 ];
 
 describe("ward MCP server (in-memory)", () => {
@@ -110,6 +104,7 @@ describe("ward MCP server — approval gate (in-memory)", () => {
     const client = await connect({ autonomy: "approval", runOperation, audit });
 
     const proposed = await client.callTool({ name: "nuc_pull", arguments: {} });
+    expect(textOf(proposed)).toContain("Proposal p1");
     expect(textOf(proposed)).toContain("docker pull hello-world");
     expect(textOf(proposed)).toContain("ward_approve");
     expect(runOperation).not.toHaveBeenCalled();
@@ -138,6 +133,21 @@ describe("ward MCP server — approval gate (in-memory)", () => {
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({ event: "proposed", proposalId: "p1" }),
     );
+  });
+
+  it("renders approval-gate messages in the configured locale (ja)", async () => {
+    const client = await connect({
+      autonomy: "approval",
+      lang: "ja",
+      operations: fakeRegistry,
+      runOperation: async () => fakeResult(),
+      audit: () => {},
+    });
+
+    const res = await client.callTool({ name: "nuc_reboot", arguments: {} });
+    expect(textOf(res)).toContain("提案 p1");
+    expect(textOf(res)).toContain("実行するには ward_approve");
+    expect(textOf(res)).toContain("sudo reboot");
   });
 
   it("executes the proposed operation exactly once on ward_approve", async () => {

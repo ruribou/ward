@@ -1,0 +1,41 @@
+ops:
+  nuc_uptime:
+    title: 稼働状況
+    description: NUC の稼働時間とロードアベレージ（uptime）を返す。
+  nuc_disk:
+    title: ディスク使用量
+    description: NUC のファイルシステム使用量（df -h）を返す。単一 SSD のため満杯は事故源——状態確認の最優先項目。
+  nuc_memory:
+    title: メモリ使用量
+    description: NUC のメモリ／スワップ使用量（free -h）を返す。
+  nuc_containers:
+    title: 稼働中コンテナ
+    description: NUC で稼働中の Docker コンテナ一覧（docker ps）を返す。
+  nuc_images:
+    title: Docker イメージ
+    description: NUC が保持する Docker イメージ一覧（docker images）を返す。
+  nuc_ports:
+    title: 待ち受けポート
+    description: NUC が待ち受けている TCP/UDP ソケット一覧（ss -tuln）を返す。公開面（攻撃面）の確認に。
+  nuc_network:
+    title: ネットワーク
+    description: NUC の各インターフェースの IP アドレス一覧（ip -br addr）を返す。
+  nuc_failed:
+    title: 失敗したサービス
+    description: 起動・実行に失敗した systemd ユニット一覧（systemctl --failed）を返す。健全性の最初の確認に。
+  nuc_pull:
+    title: イメージ取得
+    description: NUC に Docker イメージ hello-world を取得する（docker pull）。NUC のディスク状態を変える書き込み操作——承認が要る。取得結果は nuc_images で確認できる。
+  nuc_rmi:
+    title: イメージ削除
+    description: NUC から Docker イメージ hello-world を削除する（docker rmi）。nuc_pull の逆＝巻き戻し操作。書き込み操作——承認が要る。
+approve:
+  title: 提案を承認して実行
+  description: "保留中の変更操作（提案）を、その id を指定して承認・実行する。id は変更系ツールが返した提案 id（例: p1）。これは人間の承認ステップ——存在しない／使用済みの id は拒否される。"
+  rejected: 'ward: 承認できません — 提案 "{id}" は存在しないか、既に使用済みです。'
+proposal:
+  notice: |-
+    提案 {id} — この操作は NUC を変更します（risk: {risk}）。承認するまで実行されません。
+    $ {command}  on {host}
+
+    実行するには ward_approve を id="{id}" で呼び出してください。
