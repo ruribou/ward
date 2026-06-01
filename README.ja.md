@@ -4,12 +4,13 @@
 
 _English: [README.md](./README.md)_
 
-**ward** は、AI（[Claude Code](https://claude.com/claude-code) 上の Claude）に自宅インフラを
-いじらせるための仕組みです。ディスクを見る、コンテナを並べる、イメージを pull する — そういう操作を
-[MCP](https://modelcontextprotocol.io) ツールとして渡します。
+**ward** は、AI（[Claude Code](https://claude.com/claude-code) 上の Claude）に自宅インフラの操作を
+任せられる仕組みです。ディスクを見たり、コンテナを確認したり、イメージを pull したり — そういった操作を
+[MCP](https://modelcontextprotocol.io) ツールとして渡せます。
 
-肝心なのは、AI とマシンを繋ぐことじゃありません。**どこまで任せるか、事故をどう抑えるか**です。
-ward はそこを中心に作っています。どの操作も必ずガードレールを通りますし、自律は一段ずつしか解放しません。
+といっても、ただ AI とマシンを繋ぐだけではありません。どこまで任せるか、もし何かあっても
+どう被害を抑えるか — ward がいちばん大事にしているのはそこです。だから操作はいつもガードレールを
+通りますし、自律も一気にではなく少しずつ広げていきます。
 
 ## 名前について — なぜ _ward_ か
 
