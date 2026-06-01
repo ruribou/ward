@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ProposalStore } from "../guardrail/proposals.js";
 import { operations } from "../registry/operations.js";
 import { createServer, type ServerDeps } from "../server.js";
 import type { ExecResult, Operation } from "../types.js";
@@ -9,8 +13,23 @@ function fakeResult(over: Partial<ExecResult> = {}): ExecResult {
   return { stdout: "FAKE", stderr: "", exitCode: 0, ms: 1, ...over };
 }
 
+// Every server gets a temp-file proposal store so tests never touch ~/.ward.
+const tempPaths: string[] = [];
+function tempStore(): ProposalStore {
+  const path = join(tmpdir(), `ward-server-test-${process.pid}-${tempPaths.length}.json`);
+  tempPaths.push(path);
+  return new ProposalStore(path);
+}
+
+afterEach(() => {
+  for (const path of tempPaths.splice(0)) {
+    rmSync(path, { force: true });
+    rmSync(`${path}.tmp`, { force: true });
+  }
+});
+
 async function connect(deps: Partial<ServerDeps>): Promise<Client> {
-  const server = createServer(deps);
+  const server = createServer({ proposals: tempStore(), ...deps });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "0" });
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
@@ -34,7 +53,7 @@ const fakeRegistry: readonly Operation[] = [
 ];
 
 describe("ward MCP server (in-memory)", () => {
-  it("exposes exactly the read-only operations at the read-only floor (no writes, no ward_approve)", async () => {
+  it("exposes exactly the read-only operations at the read-only floor (no writes, no approve tool)", async () => {
     const client = await connect({ runOperation: async () => fakeResult(), audit: () => {} });
     const names = (await client.listTools()).tools.map((t) => t.name);
     const readOnly = operations.filter((o) => o.risk === "read-only").map((o) => o.name);
@@ -88,57 +107,67 @@ describe("ward MCP server (in-memory)", () => {
   });
 });
 
-describe("ward MCP server — approval gate (in-memory)", () => {
-  it("registers ward_approve only at the approval level", async () => {
-    const ap = await connect({
+describe("ward MCP server — propose only, approval is out of band (in-memory)", () => {
+  it("never exposes an approve tool — the AI's surface can only observe and propose", async () => {
+    const client = await connect({
       autonomy: "approval",
       operations: fakeRegistry,
       runOperation: async () => fakeResult(),
       audit: () => {},
     });
-    expect((await ap.listTools()).tools.map((t) => t.name)).toContain("ward_approve");
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    expect(names).toContain("nuc_reboot"); // it CAN propose
+    expect(names).not.toContain("ward_approve"); // but it has no way to approve
+    expect(names.some((n) => n.includes("approve"))).toBe(false);
   });
 
-  it("gates the registry's real mutating op (nuc_pull) through propose → approve", async () => {
-    const runOperation = vi.fn(async () =>
-      fakeResult({ stdout: "Status: Downloaded hello-world" }),
-    );
-    const audit = vi.fn();
-    const client = await connect({ autonomy: "approval", runOperation, audit });
-
-    const proposed = await client.callTool({ name: "nuc_pull", arguments: {} });
-    expect(textOf(proposed)).toContain("Proposal p1");
-    expect(textOf(proposed)).toContain("docker pull hello-world");
-    expect(textOf(proposed)).toContain("ward_approve");
-    expect(runOperation).not.toHaveBeenCalled();
-
-    const done = await client.callTool({ name: "ward_approve", arguments: { id: "p1" } });
-    expect(textOf(done)).toContain("docker pull hello-world");
-    expect(textOf(done)).toContain("Downloaded hello-world");
-    expect(runOperation).toHaveBeenCalledOnce();
-  });
-
-  it("proposes a mutating operation instead of executing it", async () => {
+  it("stages a proposal in the shared store and points the human at `ward approve`, without running it", async () => {
     const runOperation = vi.fn(async () => fakeResult());
     const audit = vi.fn();
+    const proposals = tempStore();
     const client = await connect({
       autonomy: "approval",
       operations: fakeRegistry,
       runOperation,
       audit,
+      proposals,
     });
 
     const res = await client.callTool({ name: "nuc_reboot", arguments: {} });
-    expect(textOf(res)).toContain("p1");
-    expect(textOf(res)).toContain("ward_approve");
-    expect(textOf(res)).toContain("sudo reboot");
-    expect(runOperation).not.toHaveBeenCalled();
+    const text = textOf(res);
+    expect(text).toContain("sudo reboot");
+    expect(text).toContain("ward approve p1"); // human runs this in their terminal
+    expect(text).not.toContain("ward_approve"); // there is no such tool to call
+
+    expect(runOperation).not.toHaveBeenCalled(); // proposing does not execute
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({ event: "proposed", proposalId: "p1" }),
     );
+    // It is durably staged for the separate `ward` CLI process to pick up.
+    expect(proposals.list().map((p) => p.id)).toEqual(["p1"]);
+    expect(proposals.get("p1")?.op.command).toEqual(["sudo", "reboot"]);
   });
 
-  it("renders approval-gate messages in the configured locale (ja)", async () => {
+  it("stages the registry's real mutating op (nuc_pull) with its plan", async () => {
+    const runOperation = vi.fn(async () => fakeResult());
+    const proposals = tempStore();
+    const client = await connect({
+      autonomy: "approval",
+      runOperation,
+      audit: () => {},
+      proposals,
+    });
+
+    const text = textOf(await client.callTool({ name: "nuc_pull", arguments: {} }));
+    expect(text).toContain("Proposal p1");
+    expect(text).toContain("docker pull hello-world");
+    expect(text).toContain("Plan:");
+    expect(text).toContain("ward approve p1");
+    expect(runOperation).not.toHaveBeenCalled();
+    expect(proposals.get("p1")?.op.command).toEqual(["docker", "pull", "hello-world"]);
+  });
+
+  it("renders the proposal in the configured locale (ja)", async () => {
     const client = await connect({
       autonomy: "approval",
       lang: "ja",
@@ -147,63 +176,10 @@ describe("ward MCP server — approval gate (in-memory)", () => {
       audit: () => {},
     });
 
-    const res = await client.callTool({ name: "nuc_reboot", arguments: {} });
-    expect(textOf(res)).toContain("提案 p1");
-    expect(textOf(res)).toContain("実行するには ward_approve");
-    expect(textOf(res)).toContain("sudo reboot");
-  });
-
-  it("executes the proposed operation exactly once on ward_approve", async () => {
-    const runOperation = vi.fn(async () => fakeResult({ stdout: "rebooted", ms: 5 }));
-    const audit = vi.fn();
-    const client = await connect({
-      autonomy: "approval",
-      operations: fakeRegistry,
-      runOperation,
-      audit,
-    });
-
-    await client.callTool({ name: "nuc_reboot", arguments: {} });
-    const res = await client.callTool({ name: "ward_approve", arguments: { id: "p1" } });
-
-    expect(runOperation).toHaveBeenCalledOnce();
-    expect(textOf(res)).toContain("sudo reboot");
-    expect(textOf(res)).toContain("rebooted");
-    expect(audit).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "executed", proposalId: "p1" }),
-    );
-  });
-
-  it("refuses a second approval of the same id (one-time use)", async () => {
-    const runOperation = vi.fn(async () => fakeResult());
-    const client = await connect({
-      autonomy: "approval",
-      operations: fakeRegistry,
-      runOperation,
-      audit: () => {},
-    });
-
-    await client.callTool({ name: "nuc_reboot", arguments: {} });
-    await client.callTool({ name: "ward_approve", arguments: { id: "p1" } });
-    const again = await client.callTool({ name: "ward_approve", arguments: { id: "p1" } });
-
-    expect((again as { isError?: boolean }).isError).toBe(true);
-    expect(textOf(again)).toContain("p1");
-    expect(runOperation).toHaveBeenCalledOnce();
-  });
-
-  it("refuses an unknown proposal id without executing anything", async () => {
-    const runOperation = vi.fn(async () => fakeResult());
-    const client = await connect({
-      autonomy: "approval",
-      operations: fakeRegistry,
-      runOperation,
-      audit: () => {},
-    });
-
-    const res = await client.callTool({ name: "ward_approve", arguments: { id: "p999" } });
-    expect((res as { isError?: boolean }).isError).toBe(true);
-    expect(runOperation).not.toHaveBeenCalled();
+    const text = textOf(await client.callTool({ name: "nuc_reboot", arguments: {} }));
+    expect(text).toContain("提案 p1");
+    expect(text).toContain("ward approve p1");
+    expect(text).toContain("sudo reboot");
   });
 
   it("still executes read-only operations directly at the approval level", async () => {

@@ -31,15 +31,23 @@ ops:
     title: イメージ削除
     description: NUC から Docker イメージ hello-world を削除する（docker rmi）。nuc_pull の逆＝巻き戻し操作。書き込み操作——承認が要る。
     plan: hello-world イメージを NUC のローカル Docker イメージストアから削除する。無ければ何も起きない（no-op）。nuc_pull で巻き戻せる。
-approve:
-  title: 提案を承認して実行
-  description: "保留中の変更操作（提案）を、その id を指定して承認・実行する。id は変更系ツールが返した提案 id（例: p1）。これは人間の承認ステップ——存在しない／使用済みの id は拒否される。"
-  rejected: 'ward: 承認できません — 提案 "{id}" は存在しないか、既に使用済みです。'
 proposal:
   notice: |-
-    提案 {id} — この操作は NUC を変更します（risk: {risk}）。承認するまで実行されません。
+    提案 {id} — この操作は NUC を変更します（risk: {risk}）。人間が承認するまで実行されません。
     $ {command}  on {host}
     {plan}
-    実行するには ward_approve を id="{id}" で呼び出してください。
+    承認は out-of-band です。あなた自身のターミナルで実行してください:  ward approve {id}
+    （保留中は ward list で確認。AI に承認ツールはありません——AI が代わりに承認することはできません。）
   plan: "plan: {description}"
   precheck: "先に確認（read-only）: $ {precheck}"
+cli:
+  notFound: 'ward: 承認できません — 提案 "{id}" は存在しないか、既に使用済みです。'
+  noPending: 保留中の提案はありません。
+  pendingHeader: "保留中の提案（承認は: ward approve <id>）:"
+  discarded: 'ward: 提案 "{id}" を破棄しました。'
+  usage: |-
+    ward — AI が提案したインフラ変更を、人間が承認するためのコマンド。
+    使い方:
+      ward list             保留中の提案（と plan）を表示
+      ward approve <id>     保留中の提案を承認して実行
+      ward reject <id>      提案を実行せずに破棄

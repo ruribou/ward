@@ -45,10 +45,13 @@ guarantees come from structure, not trust:
 - **A read-only floor.** The default level is `read-only`. At this level mutating
   operations aren't even exposed as tools — the agent never sees a write it could
   attempt.
-- **Propose → approve for writes.** At the `approval` level a mutating operation does
-  not run on request. It is _staged as a proposal_; a separate approval step executes
-  it. The model cannot perform a write in a single move — a human is structurally in
-  the loop.
+- **Out-of-band approval for writes.** At the `approval` level a mutating operation does
+  not run on request. It is _staged as a proposal_; the only thing that executes it is a
+  human running the separate `ward approve <id>` CLI in their own terminal. The agent's
+  MCP surface has _no approve tool_, so it cannot approve its own proposal — approval
+  happens in a process the agent does not drive. (This holds as long as the agent isn't
+  also handed direct credentials to the substrate; making ward the only door is a further
+  layer.)
 - **A plan with every proposal.** A proposal shows more than the command: a plain-language
   description of what will change, and a read-only command you can run first to check the
   current state — so approval is _informed_, not a rubber stamp. Building the plan never

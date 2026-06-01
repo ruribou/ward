@@ -5,7 +5,8 @@
   "type": "module",
   "license": "MIT",
   "bin": {
-    "ward-mcp": "./dist/index.js"
+    "ward-mcp": "./dist/index.js",
+    "ward": "./dist/cli.js"
   },
   "files": [
     "dist",

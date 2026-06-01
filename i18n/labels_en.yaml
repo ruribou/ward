@@ -31,15 +31,23 @@ ops:
     title: Remove image
     description: Removes the Docker image hello-world from the NUC (docker rmi). The inverse of nuc_pull — a rollback. A write operation — it requires approval.
     plan: Removes the hello-world image from the NUC's local Docker image store. If it is not present this is a no-op. Reversible with nuc_pull.
-approve:
-  title: Approve and run a proposal
-  description: Approve and execute a pending mutating operation (proposal) by its id. The id is the proposal id returned by a mutating tool (e.g. p1). This is the human approval step — a nonexistent or already-used id is rejected.
-  rejected: 'ward: cannot approve — proposal "{id}" does not exist or was already used.'
 proposal:
   notice: |-
-    Proposal {id} — this operation changes the NUC (risk: {risk}). It will not run until approved.
+    Proposal {id} — this operation changes the NUC (risk: {risk}). It will not run until a human approves it.
     $ {command}  on {host}
     {plan}
-    To run it, call ward_approve with id="{id}".
+    Approval is out of band: in your own terminal, run  ward approve {id}
+    (ward list shows pending proposals. The AI has no approve tool — it cannot approve this for you.)
   plan: "Plan: {description}"
   precheck: "Verify first (read-only): $ {precheck}"
+cli:
+  notFound: 'ward: cannot approve — proposal "{id}" does not exist or was already used.'
+  noPending: No pending proposals.
+  pendingHeader: "Pending proposals (approve one with: ward approve <id>):"
+  discarded: 'ward: discarded proposal "{id}".'
+  usage: |-
+    ward — human approval for pending infrastructure changes proposed by the AI.
+    Usage:
+      ward list             show pending proposals (and their plan)
+      ward approve <id>     approve and run a pending proposal
+      ward reject <id>      discard a pending proposal without running it
