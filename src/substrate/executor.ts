@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, type ExecFileException } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import type { ExecResult, Operation } from "../types.js";
 import { config } from "../config.js";
@@ -43,12 +43,36 @@ export function runOperation(op: Operation): Promise<ExecResult> {
           resolve({ stdout, stderr, exitCode: 0, ms });
           return;
         }
-        const code = error.code; // string (e.g. "ENOENT") | number (exit code) | null (signal/timeout)
-        const exitCode = typeof code === "number" ? code : 1;
-        const note =
-          typeof code === "string" ? `\n[ward] ssh failed: ${code} — ${error.message}` : "";
-        resolve({ stdout: stdout ?? "", stderr: (stderr ?? "") + note, exitCode, ms });
+        const exitCode = typeof error.code === "number" ? error.code : 1;
+        resolve({
+          stdout: stdout ?? "",
+          stderr: (stderr ?? "") + failureNote(error),
+          exitCode,
+          ms,
+        });
       },
     );
   });
+}
+
+/**
+ * Turn an execFile failure into a diagnostic note appended to stderr, so a
+ * timeout or signal kill is not silently mistaken for a plain `exit 1`.
+ * `error.code` is a number (real exit code), a string (spawn or maxBuffer
+ * error), or null (killed by a signal — our timeout kills with SIGTERM).
+ */
+function failureNote(error: ExecFileException): string {
+  if (error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+    return `\n[ward] output exceeded ${MAX_OUTPUT_BYTES} bytes — killed and truncated`;
+  }
+  if (error.killed && error.signal === "SIGTERM") {
+    return `\n[ward] timed out after ${COMMAND_TIMEOUT_MS / 1000}s`;
+  }
+  if (error.signal) {
+    return `\n[ward] killed by ${error.signal}`;
+  }
+  if (typeof error.code === "string") {
+    return `\n[ward] ssh failed: ${error.code} — ${error.message}`;
+  }
+  return "";
 }
