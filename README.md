@@ -8,11 +8,10 @@ _日本語版: [README.ja.md](./README.ja.md)_
 run real operations on your home infrastructure — checking disk, listing containers,
 pulling an image — by exposing them as [MCP](https://modelcontextprotocol.io) tools.
 
-The hard part isn't connecting an AI to a machine. It's deciding **how much autonomy
-to grant, and how to contain a mistake when it happens.** ward is built around that
-question: every operation passes through a guardrail before it can touch anything, and
-autonomy is released one deliberate step at a time — read-only first, human-approved
-next, fully autonomous only later.
+That said, ward is about more than just connecting an AI to a machine. How much to hand
+off — and how to keep the damage small if something goes wrong — is what it cares about
+most. So every operation goes through a guardrail, and autonomy opens up gradually,
+not all at once.
 
 ## The name — why _ward_
 
