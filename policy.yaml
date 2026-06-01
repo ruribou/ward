@@ -1,0 +1,28 @@
+# Guardrail policy as data (CONCEPT RQ3): which (autonomy level × operation risk)
+# combinations ward will allow, gate behind human approval, or deny. Edited as a
+# reviewable diff, not as code — so "what is permitted" is a record, not a rule
+# buried in TypeScript.
+#
+# fail-closed: anything not explicitly allowed here is denied. A malformed policy
+# (unknown level/risk key, bad decision value, a missing cell) makes ward fail to
+# start — the same posture as the operation registry loader.
+#
+# decisions:
+#   allow             run it now (read-only: cannot change the substrate)
+#   require-approval  permitted, but only after out-of-band human approval
+#   deny              forbidden at this level
+
+# Decision per (autonomy level → risk class). Every known autonomy level must
+# declare every risk class; a missing cell is a load error (no silent holes).
+defaults:
+  read-only: # the safe floor — observe only
+    read-only: allow
+    mutating: deny
+  approval: # mutating runs only after a human approves the proposal
+    read-only: allow
+    mutating: require-approval
+
+# Optional per-operation overrides, keyed by op name then autonomy level. An
+# override wins over the default for that (op, level) pair; everything else falls
+# back to `defaults`. Leave empty for none.
+overrides: {}

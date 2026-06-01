@@ -1,5 +1,6 @@
 import type { AutonomyLevel, Operation } from "../types.js";
 import { config } from "../config.js";
+import { decide, policy as defaultPolicy, type PolicyData } from "./policy.js";
 
 /**
  * What the guardrail gate decided for an operation:
@@ -23,28 +24,31 @@ export class GuardrailError extends Error {
 /**
  * The guardrail gate. Every operation passes through here before it can execute.
  *
- * It maps (autonomy level × operation risk) to a decision:
+ * The (autonomy level × operation risk) decision is no longer hard-coded — it is
+ * read from the declarative policy (policy.yaml, see {@link decide}). With the
+ * shipped policy this is still the staged-autonomy dial (CONCEPT RQ2/RQ3):
  *
  *   level \ risk   read-only        mutating
  *   ───────────────────────────────────────────────
- *   read-only      allow            THROW (forbidden)
+ *   read-only      allow            deny (forbidden)
  *   approval       allow            require-approval
  *
- * Read-only operations are always allowed — they cannot change the substrate.
- * Mutating operations are forbidden outright at the read-only floor, and gated
- * behind human approval at the "approval" level. This is the staged-autonomy
- * dial (CONCEPT RQ2): widening what ward may do is a config change here, not a
- * rewrite, and it is defense in depth — even if a mutating op reached this gate
- * at the read-only level, it would be refused.
+ * Read-only operations cannot change the substrate; mutating ones are denied at
+ * the read-only floor and gated behind human approval at the "approval" level.
+ * A "deny" decision is raised as a {@link GuardrailError} — defense in depth, so
+ * even a mutating op that reached this gate at the read-only level is refused.
+ * The policy is injectable for tests; production uses the loaded policy.yaml.
  */
-export function guard(op: Operation, level: AutonomyLevel = config.autonomy): GuardDecision {
-  if (op.risk === "read-only") {
-    return "allow";
+export function guard(
+  op: Operation,
+  level: AutonomyLevel = config.autonomy,
+  policyData: PolicyData = defaultPolicy,
+): GuardDecision {
+  const decision = decide(policyData, level, op.risk, op.name);
+  if (decision === "deny") {
+    throw new GuardrailError(
+      `ward: operation '${op.name}' (${op.risk}) is not permitted at autonomy level '${level}'`,
+    );
   }
-  if (level === "approval") {
-    return "require-approval";
-  }
-  throw new GuardrailError(
-    `ward: operation '${op.name}' (${op.risk}) is not permitted at autonomy level '${level}'`,
-  );
+  return decision;
 }
