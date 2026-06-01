@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { guard, GuardrailError } from "../../guardrail/guard.js";
+import { parsePolicy } from "../../guardrail/policy.js";
 import { operations } from "../../registry/operations.js";
 import type { Operation } from "../../types.js";
 
@@ -38,5 +39,22 @@ describe("guard", () => {
 
   it("gates a mutating operation behind approval at the approval level", () => {
     expect(guard(mutating, "approval")).toBe("require-approval");
+  });
+
+  it("honours a per-op override from an injected policy", () => {
+    const policy = parsePolicy(`
+defaults:
+  read-only:
+    read-only: allow
+    mutating: deny
+  approval:
+    read-only: allow
+    mutating: require-approval
+overrides:
+  nuc_reboot:
+    approval: deny
+`);
+    // The default would gate it; the override denies it instead.
+    expect(() => guard(mutating, "approval", policy)).toThrow(GuardrailError);
   });
 });
