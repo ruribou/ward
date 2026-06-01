@@ -85,6 +85,11 @@ Early and evolving. Progress so far:
 **Install & quickstart docs are coming** as the interface settles. Until then the
 [issues](https://github.com/ruribou/ward/issues) track what's planned.
 
+## Contributing
+
+Adding an operation is a small, reviewable change. See [CONTRIBUTING.md](./CONTRIBUTING.md)
+for the step-by-step recipe and the safety invariants it must keep.
+
 ## License
 
 [MIT](./LICENSE)
