@@ -2,7 +2,7 @@
 
 > Operate your home infrastructure safely, in natural language, via Claude Code.
 
-_日本語版: [README.ja.md](./README.ja.md)_
+_日本語版: [docs/README.ja.md](./docs/README.ja.md)_
 
 **ward** lets an AI agent (Claude, through [Claude Code](https://claude.com/claude-code))
 run real operations on your home infrastructure — checking disk, listing containers,
@@ -84,6 +84,11 @@ Early and evolving. Progress so far:
 
 **Install & quickstart docs are coming** as the interface settles. Until then the
 [issues](https://github.com/ruribou/ward/issues) track what's planned.
+
+## Contributing
+
+Adding an operation is a small, reviewable change. See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md)
+for the step-by-step recipe and the safety invariants it must keep.
 
 ## License
 

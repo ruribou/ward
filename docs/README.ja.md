@@ -2,7 +2,7 @@
 
 > 自宅インフラを、自然言語で・安全に、Claude Code から操作する。
 
-_English: [README.md](./README.md)_
+_English: [README.md](../README.md)_
 
 **ward** は、AI（[Claude Code](https://claude.com/claude-code) 上の Claude）に自宅インフラの操作を
 任せられる仕組みです。ディスクを見たり、コンテナを確認したり、イメージを pull したり — そういった操作を
@@ -25,7 +25,7 @@ _English: [README.md](./README.md)_
 
 ward は既定で読み取り専用。エージェントを信用する代わりに、構造で守ります。
 
-- **許可リストがすべて。** ward が打てるコマンドは [`operations.yaml`](./operations.yaml) に固定で
+- **許可リストがすべて。** ward が打てるコマンドは [`operations.yaml`](../operations.yaml) に固定で
   並んでいて、`risk`（リスク）が付いています。ここにないものは実行できません。
 - **必ずゲートを通る。** どの呼び出しも、実行前に `autonomy（自律レベル） × risk` で判定します。
 
@@ -64,6 +64,11 @@ ward は既定で読み取り専用。エージェントを信用する代わり
 
 **インストール手順はこれから。** 落ち着き次第そろえます。計画は [issues](https://github.com/ruribou/ward/issues) に。
 
+## 貢献
+
+操作の追加は小さく、レビューしやすい変更です。手順と、守るべき安全不変条件は
+[CONTRIBUTING.ja.md](./CONTRIBUTING.ja.md) を参照してください。
+
 ## ライセンス
 
-[MIT](./LICENSE)
+[MIT](../LICENSE)
