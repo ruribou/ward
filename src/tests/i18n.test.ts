@@ -15,13 +15,13 @@ describe("i18n label loader", () => {
   });
 
   it("substitutes {var} placeholders", () => {
-    const text = getLabel("approve.rejected", "en", { id: "p7" });
+    const text = getLabel("cli.notFound", "en", { id: "p7" });
     expect(text).toContain("p7");
     expect(text).not.toContain("{id}");
   });
 
   it("leaves an unmatched placeholder untouched", () => {
-    expect(getLabel("approve.rejected", "en", {})).toContain("{id}");
+    expect(getLabel("cli.notFound", "en", {})).toContain("{id}");
   });
 
   it("throws for a missing key", () => {
