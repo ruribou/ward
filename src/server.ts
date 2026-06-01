@@ -11,8 +11,7 @@ import type { AuditEntry, AutonomyLevel, ExecResult, Operation } from "./types.j
 /**
  * Side effects and policy inputs, injected so the server wiring can be exercised
  * in-memory in tests without touching the substrate (no SSH, no real NUC) and at
- * any autonomy level — including with a fake mutating registry that the
- * committed operations.yaml deliberately does not contain yet.
+ * any autonomy level — with whatever registry and autonomy a test wants to pin.
  */
 export interface ServerDeps {
   runOperation: (op: Operation) => Promise<ExecResult>;
@@ -51,6 +50,12 @@ export function createServer(deps: Partial<ServerDeps> = {}): McpServer {
   const proposals = new ProposalStore();
 
   for (const op of operations) {
+    // At the read-only floor the surface itself stays read-only: mutating ops are
+    // not even exposed as tools. The gate would refuse them anyway — this is the
+    // same guardrail one layer earlier, so the model never sees a write it can't do.
+    if (op.risk === "mutating" && autonomy === "read-only") {
+      continue;
+    }
     server.registerTool(op.name, { title: op.title, description: op.description }, async () => {
       const decision = guard(op, autonomy);
 

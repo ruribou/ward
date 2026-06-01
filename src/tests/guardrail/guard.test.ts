@@ -12,9 +12,17 @@ const mutating: Operation = {
 };
 
 describe("guard", () => {
-  it("allows every operation in the registry at the read-only level (all read-only)", () => {
-    for (const op of operations) {
+  it("allows every read-only operation in the registry at the read-only level", () => {
+    for (const op of operations.filter((o) => o.risk === "read-only")) {
       expect(guard(op, "read-only")).toBe("allow");
+    }
+  });
+
+  it("forbids the registry's real mutating operations at the read-only level", () => {
+    const mutating = operations.filter((o) => o.risk === "mutating");
+    expect(mutating.length).toBeGreaterThan(0);
+    for (const op of mutating) {
+      expect(() => guard(op, "read-only")).toThrow(GuardrailError);
     }
   });
 
