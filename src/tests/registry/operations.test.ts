@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { LOCALES } from "../../config.js";
+import { getLabel } from "../../i18n/index.js";
 import { OperationLoadError, operations, parseOperations } from "../../registry/operations.js";
 
 describe("operations registry", () => {
@@ -35,10 +37,12 @@ describe("operations registry", () => {
     }
   });
 
-  it("gives every operation a title and a description", () => {
+  it("has a title and description label in every locale for every operation", () => {
     for (const op of operations) {
-      expect(op.title.length).toBeGreaterThan(0);
-      expect(op.description.length).toBeGreaterThan(0);
+      for (const locale of LOCALES) {
+        expect(getLabel(`ops.${op.name}.title`, locale).length).toBeGreaterThan(0);
+        expect(getLabel(`ops.${op.name}.description`, locale).length).toBeGreaterThan(0);
+      }
     }
   });
 });
@@ -47,8 +51,6 @@ describe("parseOperations (the loader guardrail)", () => {
   const valid = `
 operations:
   - name: nuc_uptime
-    title: t
-    description: d
     risk: read-only
     command: [uptime]
 `;
@@ -63,8 +65,6 @@ operations:
     const yaml = `
 operations:
   - name: nuc_pwn
-    title: t
-    description: d
     risk: read-only
     command: [sh, -c, "rm -rf /"]
 `;
@@ -75,8 +75,6 @@ operations:
     const yaml = `
 operations:
   - name: nuc_cat
-    title: t
-    description: d
     risk: read-only
     command: [cat, /etc/shadow]
 `;
@@ -87,8 +85,6 @@ operations:
     const yaml = `
 operations:
   - name: nuc_uptime
-    title: t
-    description: d
     risk: yolo
     command: [uptime]
 `;
@@ -102,8 +98,8 @@ operations:
   it("rejects duplicate operation names", () => {
     const yaml = `
 operations:
-  - { name: nuc_uptime, title: t, description: d, risk: read-only, command: [uptime] }
-  - { name: nuc_uptime, title: t, description: d, risk: read-only, command: [uptime] }
+  - { name: nuc_uptime, risk: read-only, command: [uptime] }
+  - { name: nuc_uptime, risk: read-only, command: [uptime] }
 `;
     expect(() => parseOperations(yaml)).toThrow(/duplicate/);
   });

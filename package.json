@@ -9,7 +9,8 @@
   },
   "files": [
     "dist",
-    "operations.yaml"
+    "operations.yaml",
+    "i18n"
   ],
   "engines": {
     "node": ">=22"

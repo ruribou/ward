@@ -41,18 +41,12 @@ function asRecord(value: unknown, where: string): Record<string, unknown> {
 
 function validateOperation(raw: unknown, index: number): Operation {
   const obj = asRecord(raw, `operations[${index}]`);
-  const { name, title, description, risk, command } = obj;
+  const { name, risk, command } = obj;
 
   if (typeof name !== "string" || !NAME_RE.test(name)) {
     throw new OperationLoadError(
       `operations[${index}].name must match ${NAME_RE} (got ${JSON.stringify(name)})`,
     );
-  }
-  if (typeof title !== "string" || title.length === 0) {
-    throw new OperationLoadError(`${name}.title must be a non-empty string`);
-  }
-  if (typeof description !== "string" || description.length === 0) {
-    throw new OperationLoadError(`${name}.description must be a non-empty string`);
   }
   if (typeof risk !== "string" || !RISK_CLASSES.includes(risk as RiskClass)) {
     throw new OperationLoadError(
@@ -74,7 +68,7 @@ function validateOperation(raw: unknown, index: number): Operation {
     argv.push(part);
   }
 
-  return { name, title, description, risk: risk as RiskClass, command: argv };
+  return { name, risk: risk as RiskClass, command: argv };
 }
 
 /**

@@ -8,8 +8,6 @@ import type { Operation } from "../../types.js";
 
 const op: Operation = {
   name: "nuc_disk",
-  title: "t",
-  description: "d",
   risk: "read-only",
   command: ["df", "-h"],
 };

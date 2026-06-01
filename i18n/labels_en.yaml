@@ -1,0 +1,41 @@
+ops:
+  nuc_uptime:
+    title: Uptime
+    description: Returns the NUC's uptime and load average (uptime).
+  nuc_disk:
+    title: Disk usage
+    description: Returns the NUC's filesystem usage (df -h). With a single SSD a full disk is a top failure source — the first thing to check.
+  nuc_memory:
+    title: Memory usage
+    description: Returns the NUC's memory and swap usage (free -h).
+  nuc_containers:
+    title: Running containers
+    description: Returns the Docker containers running on the NUC (docker ps).
+  nuc_images:
+    title: Docker images
+    description: Returns the Docker images stored on the NUC (docker images).
+  nuc_ports:
+    title: Listening ports
+    description: Returns the TCP/UDP sockets the NUC is listening on (ss -tuln) — for checking the exposed (attack) surface.
+  nuc_network:
+    title: Network
+    description: Returns the IP address of each of the NUC's interfaces (ip -br addr).
+  nuc_failed:
+    title: Failed services
+    description: Returns the systemd units that failed to start or run (systemctl --failed) — a first health check.
+  nuc_pull:
+    title: Pull image
+    description: Pulls the Docker image hello-world onto the NUC (docker pull). A write operation that changes the NUC's disk state — it requires approval. Check the result with nuc_images.
+  nuc_rmi:
+    title: Remove image
+    description: Removes the Docker image hello-world from the NUC (docker rmi). The inverse of nuc_pull — a rollback. A write operation — it requires approval.
+approve:
+  title: Approve and run a proposal
+  description: Approve and execute a pending mutating operation (proposal) by its id. The id is the proposal id returned by a mutating tool (e.g. p1). This is the human approval step — a nonexistent or already-used id is rejected.
+  rejected: 'ward: cannot approve — proposal "{id}" does not exist or was already used.'
+proposal:
+  notice: |-
+    Proposal {id} — this operation changes the NUC (risk: {risk}). It will not run until approved.
+    $ {command}  on {host}
+
+    To run it, call ward_approve with id="{id}".

@@ -4,8 +4,6 @@ import type { Operation } from "../../types.js";
 
 const op: Operation = {
   name: "nuc_reboot",
-  title: "t",
-  description: "d",
   risk: "mutating",
   command: ["sudo", "reboot"],
 };

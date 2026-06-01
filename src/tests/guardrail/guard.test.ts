@@ -5,8 +5,6 @@ import type { Operation } from "../../types.js";
 
 const mutating: Operation = {
   name: "nuc_reboot",
-  title: "(test) reboot",
-  description: "(test) a hypothetical mutating operation",
   risk: "mutating",
   command: ["sudo", "reboot"],
 };
