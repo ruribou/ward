@@ -1,7 +1,9 @@
 # Contributing
 
+_日本語版: [CONTRIBUTING.ja.md](./CONTRIBUTING.ja.md)_
+
 Thanks for helping ward grow. This guide covers the one thing contributors do most
-often: **adding an operation**. Read the [README](./README.md) first — especially the
+often: **adding an operation**. Read the [README](../README.md) first — especially the
 _Safety model_ and _Autonomy ladder_ — because every step below exists to keep those
 guarantees true.
 
@@ -9,7 +11,7 @@ guarantees true.
 
 An **operation** is one capability ward can perform against the substrate (the NUC),
 exposed to the AI as a single [MCP](https://modelcontextprotocol.io) tool. Every
-operation ward can ever run is declared in [`operations.yaml`](./operations.yaml) at the
+operation ward can ever run is declared in [`operations.yaml`](../operations.yaml) at the
 repo root — the single source of truth for "what ward can do". Nothing outside that
 allowlist is reachable.
 
