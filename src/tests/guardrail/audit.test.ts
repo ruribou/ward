@@ -78,4 +78,33 @@ describe("audit", () => {
       vi.resetModules();
     }
   });
+
+  it("never throws when WARD_AUDIT_LOG is unwritable, and warns loudly on stderr", async () => {
+    const dir = join(tmpdir(), `ward-audit-missing-${process.pid}`);
+    rmSync(dir, { recursive: true, force: true }); // parent dir absent → append throws ENOENT
+    const bad = join(dir, "audit.log");
+    process.env.WARD_AUDIT_LOG = bad;
+    vi.resetModules(); // so config (env-read at import) and audit pick up the bad path
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      const { audit: freshAudit } = await import("../../guardrail/audit.js");
+      // A failed file append must not surface as a thrown error: for an executed
+      // event the command already ran, and throwing would mask that side effect.
+      expect(() => freshAudit({ event: "executed", op, result })).not.toThrow();
+
+      const lines = spy.mock.calls.map(
+        (c) => JSON.parse(c[0] as string) as Record<string, unknown>,
+      );
+      // The audit record still reached stderr, the always-available sink...
+      expect(lines.some((l) => l.event === "executed")).toBe(true);
+      // ...and the broken file sink was reported, not silently swallowed.
+      const warning = lines.find((l) => l.event === "audit-write-failed");
+      expect(warning).toMatchObject({ event: "audit-write-failed", auditLog: bad });
+      expect(typeof warning!.error).toBe("string");
+    } finally {
+      delete process.env.WARD_AUDIT_LOG;
+      rmSync(dir, { recursive: true, force: true });
+      vi.resetModules();
+    }
+  });
 });

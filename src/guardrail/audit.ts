@@ -19,13 +19,30 @@ import { config } from "../config.js";
  * - Always one JSON line to stderr (Claude Code captures the MCP server's
  *   stderr; stdout is reserved for the JSON-RPC channel).
  * - Additionally appended to WARD_AUDIT_LOG when set — an opt-in, append-only
- *   file that survives restarts for a durable, reviewable history.
+ *   file that survives restarts for a durable, reviewable history. This append
+ *   is best-effort: a failure is reported (loudly, on stderr) but never thrown,
+ *   so a broken log path cannot turn a successful operation into a tool error.
  */
 export function audit(entry: AuditEntry): void {
   const line = `${JSON.stringify(serialize(entry))}\n`;
   process.stderr.write(line);
   if (config.auditLog !== undefined) {
-    appendFileSync(config.auditLog, line);
+    try {
+      appendFileSync(config.auditLog, line);
+    } catch (err) {
+      // The audit record already reached stderr (the always-available sink), so
+      // only the durable file copy is lost — never re-throw. For an "executed"
+      // event the command has already run; throwing here would mask a real side
+      // effect as a failure (issue #24). Surface the broken sink instead.
+      process.stderr.write(
+        `${JSON.stringify({
+          ts: new Date().toISOString(),
+          event: "audit-write-failed",
+          auditLog: config.auditLog,
+          error: err instanceof Error ? err.message : String(err),
+        })}\n`,
+      );
+    }
   }
 }
 
