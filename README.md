@@ -49,6 +49,10 @@ guarantees come from structure, not trust:
   not run on request. It is _staged as a proposal_; a separate approval step executes
   it. The model cannot perform a write in a single move — a human is structurally in
   the loop.
+- **A plan with every proposal.** A proposal shows more than the command: a plain-language
+  description of what will change, and a read-only command you can run first to check the
+  current state — so approval is _informed_, not a rubber stamp. Building the plan never
+  touches the NUC.
 - **Constant commands, no shell.** Commands run as fixed argument vectors (never through
   a shell), and the model supplies _no part_ of the command — not even an argument.
   There is no string for it to inject into.

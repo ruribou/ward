@@ -39,9 +39,32 @@ function asRecord(value: unknown, where: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+/**
+ * Validate an argv array (the same charset guard for both `command` and the
+ * optional `precheck`): a non-empty array whose every element matches ARG_RE, so
+ * no entry can smuggle in spaces or shell metacharacters. `field` names which
+ * array is being checked so the error points at the right place.
+ */
+function validateArgv(value: unknown, name: string, field: string): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new OperationLoadError(`${name}.${field} must be a non-empty array`);
+  }
+  const argv: string[] = [];
+  for (const part of value) {
+    if (typeof part !== "string" || !ARG_RE.test(part)) {
+      throw new OperationLoadError(
+        `${name}.${field} has an unsafe argument ${JSON.stringify(part)} — ` +
+          `only ${ARG_RE} is allowed (no spaces or shell metacharacters)`,
+      );
+    }
+    argv.push(part);
+  }
+  return argv;
+}
+
 function validateOperation(raw: unknown, index: number): Operation {
   const obj = asRecord(raw, `operations[${index}]`);
-  const { name, risk, command } = obj;
+  const { name, risk, command, precheck } = obj;
 
   if (typeof name !== "string" || !NAME_RE.test(name)) {
     throw new OperationLoadError(
@@ -53,22 +76,16 @@ function validateOperation(raw: unknown, index: number): Operation {
       `${name}.risk must be one of [${RISK_CLASSES.join(", ")}] (got ${JSON.stringify(risk)})`,
     );
   }
-  if (!Array.isArray(command) || command.length === 0) {
-    throw new OperationLoadError(`${name}.command must be a non-empty array`);
-  }
 
-  const argv: string[] = [];
-  for (const part of command) {
-    if (typeof part !== "string" || !ARG_RE.test(part)) {
-      throw new OperationLoadError(
-        `${name}.command has an unsafe argument ${JSON.stringify(part)} — ` +
-          `only ${ARG_RE} is allowed (no spaces or shell metacharacters)`,
-      );
-    }
-    argv.push(part);
+  const op: Operation = {
+    name,
+    risk: risk as RiskClass,
+    command: validateArgv(command, name, "command"),
+  };
+  if (precheck === undefined) {
+    return op;
   }
-
-  return { name, risk: risk as RiskClass, command: argv };
+  return { ...op, precheck: validateArgv(precheck, name, "precheck") };
 }
 
 /**
