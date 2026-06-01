@@ -8,10 +8,16 @@ describe("operations registry", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("only contains read-only operations (the registry is still entirely read-only)", () => {
+  it("classifies every operation as a known risk class", () => {
     for (const op of operations) {
-      expect(op.risk).toBe("read-only");
+      expect(["read-only", "mutating"]).toContain(op.risk);
     }
+  });
+
+  it("now includes the first mutating operations behind the approval gate", () => {
+    const mutating = operations.filter((o) => o.risk === "mutating").map((o) => o.name);
+    expect(mutating).toContain("nuc_pull");
+    expect(mutating).toContain("nuc_rmi");
   });
 
   it("uses the nuc_ tool-name convention", () => {

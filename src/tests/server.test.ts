@@ -24,7 +24,7 @@ function textOf(res: unknown): string {
   return content?.find((b) => b.type === "text")?.text ?? "";
 }
 
-/** A registry with a mutating op — what operations.yaml deliberately lacks yet. */
+/** A small registry with a mutating op, pinned so gate tests don't depend on the real one. */
 const fakeRegistry: readonly Operation[] = [
   { name: "nuc_disk", title: "disk", description: "d", risk: "read-only", command: ["df", "-h"] },
   {
@@ -37,17 +37,20 @@ const fakeRegistry: readonly Operation[] = [
 ];
 
 describe("ward MCP server (in-memory)", () => {
-  it("registers exactly the read-only registry as tools (no ward_approve at the read-only floor)", async () => {
+  it("exposes exactly the read-only operations at the read-only floor (no writes, no ward_approve)", async () => {
     const client = await connect({ runOperation: async () => fakeResult(), audit: () => {} });
     const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names.sort()).toEqual([...operations].map((o) => o.name).sort());
+    const readOnly = operations.filter((o) => o.risk === "read-only").map((o) => o.name);
+    expect(names.sort()).toEqual(readOnly.sort());
+    expect(names).not.toContain("nuc_pull");
     expect(names).not.toContain("ward_approve");
   });
 
   it("works with default dependencies (no injection)", async () => {
     const client = await connect({});
     const { tools } = await client.listTools();
-    expect(tools.length).toBe(operations.length);
+    const readOnly = operations.filter((o) => o.risk === "read-only").length;
+    expect(tools.length).toBe(readOnly);
   });
 
   it("runs guard → executor → audit and returns formatted output", async () => {
@@ -97,6 +100,24 @@ describe("ward MCP server — approval gate (in-memory)", () => {
       audit: () => {},
     });
     expect((await ap.listTools()).tools.map((t) => t.name)).toContain("ward_approve");
+  });
+
+  it("gates the registry's real mutating op (nuc_pull) through propose → approve", async () => {
+    const runOperation = vi.fn(async () =>
+      fakeResult({ stdout: "Status: Downloaded hello-world" }),
+    );
+    const audit = vi.fn();
+    const client = await connect({ autonomy: "approval", runOperation, audit });
+
+    const proposed = await client.callTool({ name: "nuc_pull", arguments: {} });
+    expect(textOf(proposed)).toContain("docker pull hello-world");
+    expect(textOf(proposed)).toContain("ward_approve");
+    expect(runOperation).not.toHaveBeenCalled();
+
+    const done = await client.callTool({ name: "ward_approve", arguments: { id: "p1" } });
+    expect(textOf(done)).toContain("docker pull hello-world");
+    expect(textOf(done)).toContain("Downloaded hello-world");
+    expect(runOperation).toHaveBeenCalledOnce();
   });
 
   it("proposes a mutating operation instead of executing it", async () => {
