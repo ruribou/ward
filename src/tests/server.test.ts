@@ -97,6 +97,18 @@ describe("ward MCP server (in-memory)", () => {
     expect(textOf(res)).toContain("exit 1");
   });
 
+  it("keeps stderr visible even when stdout is non-empty", async () => {
+    const client = await connect({
+      runOperation: async () =>
+        fakeResult({ stdout: "pulling layers", stderr: "Error: manifest unknown", exitCode: 1 }),
+      audit: () => {},
+    });
+    const text = textOf(await client.callTool({ name: "nuc_uptime", arguments: {} }));
+    expect(text).toContain("pulling layers");
+    expect(text).toContain("Error: manifest unknown");
+    expect(text).toContain("exit 1");
+  });
+
   it("shows a placeholder when there is no output at all", async () => {
     const client = await connect({
       runOperation: async () => fakeResult({ stdout: "", stderr: "" }),
