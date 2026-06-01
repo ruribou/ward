@@ -6,14 +6,17 @@ import { config } from "../config.js";
  * Structured audit logging: every operation leaves a trace, so what ward did is
  * reviewable after the fact (CONCEPT principle "everything as a diff").
  *
- * Two events are recorded:
+ * Three events are recorded:
  * - "proposed": a mutating operation was staged behind the approval gate (it has
  *               not run — there is no result yet).
  * - "executed": a command actually ran (carries its exit code and duration).
+ * - "rejected": a human discarded a proposal without running it.
  *
- * A mutating operation therefore leaves a "proposed" line and, once approved, an
- * "executed" line — the record shows both what was asked for and what ran. The
- * command's *output* is never logged, only metadata.
+ * A mutating operation therefore leaves a "proposed" line and then one resolution
+ * — an "executed" line once approved, or a "rejected" line if discarded — so the
+ * record shows both what was asked for and how it ended. (A proposal with neither
+ * resolution is still pending.) The command's *output* is never logged, only
+ * metadata.
  *
  * Sinks:
  * - Always one JSON line to stderr (Claude Code captures the MCP server's

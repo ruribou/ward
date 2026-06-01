@@ -59,9 +59,10 @@ guarantees come from structure, not trust:
 - **Constant commands, no shell.** Commands run as fixed argument vectors (never through
   a shell), and the model supplies _no part_ of the command — not even an argument.
   There is no string for it to inject into.
-- **An append-only audit trail.** What was proposed and what was executed is recorded so
+- **An append-only audit trail.** What was proposed, executed, and rejected is recorded so
   every action stays reviewable and reversible. `ward metrics` summarizes that trail into
-  the guardrail numbers — success rate, human-intervention rate, and blast radius.
+  the guardrail numbers — success rate, human-intervention rate, proposal resolution
+  (approved / rejected / pending), and blast radius.
 
 ## Autonomy ladder
 
