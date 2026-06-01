@@ -63,9 +63,32 @@ describe("runOperation", () => {
     expect(r.stderr).toContain("[ward] ssh failed");
   });
 
-  it("treats a signal/timeout (null error code) as exitCode 1", async () => {
-    whenExecFile({ code: null, killed: true, signal: "SIGTERM", message: "timed out" }, "", "");
+  it("flags a timeout (killed with SIGTERM) distinctly from a plain exit 1", async () => {
+    whenExecFile({ code: null, killed: true, signal: "SIGTERM", message: "timed out" }, "partial", "");
     const r = await runOperation(op);
     expect(r.exitCode).toBe(1);
+    expect(r.stdout).toBe("partial");
+    expect(r.stderr).toContain("[ward] timed out");
+    expect(r.stderr).not.toContain("ssh failed");
+  });
+
+  it("names the signal when killed by a non-timeout signal", async () => {
+    whenExecFile({ code: null, killed: true, signal: "SIGKILL", message: "killed" }, "", "");
+    const r = await runOperation(op);
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain("[ward] killed by SIGKILL");
+  });
+
+  it("explains a maxBuffer overflow instead of reading as an ssh failure", async () => {
+    whenExecFile(
+      { code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER", killed: true, message: "maxBuffer exceeded" },
+      "truncated output",
+      "",
+    );
+    const r = await runOperation(op);
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toBe("truncated output");
+    expect(r.stderr).toContain("[ward] output exceeded");
+    expect(r.stderr).not.toContain("ssh failed");
   });
 });
