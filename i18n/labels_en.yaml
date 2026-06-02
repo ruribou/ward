@@ -40,6 +40,9 @@ proposal:
     (ward list shows pending proposals. The AI has no approve tool — it cannot approve this for you.)
   plan: "Plan: {description}"
   precheck: "Verify first (read-only): $ {precheck}"
+gate:
+  reversible: "Reversible: undo this change with {inverse}."
+  irreversible: "Irreversible: this change cannot be undone — there is no inverse operation."
 cli:
   notFound: 'ward: cannot approve — proposal "{id}" does not exist or was already used.'
   noPending: No pending proposals.

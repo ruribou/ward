@@ -77,6 +77,27 @@ export interface Operation {
    * placeholder-free command before it ever reaches the executor.
    */
   readonly params?: readonly OpParam[];
+  /**
+   * The operation that undoes this one — reversibility as declared data, so
+   * rollback is a first-class property of a change rather than tribal knowledge
+   * (issue #18, CONCEPT Phase 2). Names another *mutating* op in the registry,
+   * cross-checked at load time: a dangling or read-only inverse is a load error.
+   *
+   * Exactly one of `inverse` / {@link irreversible} must be set on a mutating op
+   * (neither, or both, fails the loader — no silent holes); a read-only op must
+   * set NEITHER. The first inverse pair is sys_pull_image ⇄ sys_remove_image on
+   * the same {image}. The inverse is surfaced in a proposal's plan so the operator
+   * knows, before approving, how to roll the change back.
+   */
+  readonly inverse?: string;
+  /**
+   * Marks a mutating op as having no inverse — it cannot be undone. This is the
+   * deliberate alternative to {@link inverse}: an op must declare one or the
+   * other, so "we forgot to think about rollback" can never pass review as a
+   * silently irreversible change. An irreversible op carries a larger blast
+   * radius (see metrics) because its effect is permanent.
+   */
+  readonly irreversible?: true;
 }
 
 /** Result of executing an operation against the substrate. */

@@ -153,7 +153,7 @@ function validateParams(value: unknown, name: string): Map<string, OpParam> {
 
 function validateOperation(raw: unknown, index: number): Operation {
   const obj = asRecord(raw, `operations[${index}]`);
-  const { name, risk, command, precheck, params } = obj;
+  const { name, risk, command, precheck, params, inverse, irreversible } = obj;
 
   if (typeof name !== "string" || !NAME_RE.test(name)) {
     throw new OperationLoadError(
@@ -163,6 +163,21 @@ function validateOperation(raw: unknown, index: number): Operation {
   if (typeof risk !== "string" || !RISK_CLASSES.includes(risk as RiskClass)) {
     throw new OperationLoadError(
       `${name}.risk must be one of [${RISK_CLASSES.join(", ")}] (got ${JSON.stringify(risk)})`,
+    );
+  }
+
+  // Reversibility shape. The *cross-reference* checks (an inverse must name an
+  // existing mutating op; a mutating op must declare exactly one of the two; a
+  // read-only op neither) need the full op set, so they run in parseOperations
+  // once every op is parsed. Here we only validate each field's own shape.
+  if (inverse !== undefined && (typeof inverse !== "string" || !NAME_RE.test(inverse))) {
+    throw new OperationLoadError(
+      `${name}.inverse must be an operation name matching ${NAME_RE} (got ${JSON.stringify(inverse)})`,
+    );
+  }
+  if (irreversible !== undefined && irreversible !== true) {
+    throw new OperationLoadError(
+      `${name}.irreversible, if set, must be the literal true (got ${JSON.stringify(irreversible)})`,
     );
   }
 
@@ -196,8 +211,67 @@ function validateOperation(raw: unknown, index: number): Operation {
     command: cmd.argv,
     ...(pre !== undefined ? { precheck: pre.argv } : {}),
     ...(declared.size > 0 ? { params: [...declared.values()] } : {}),
+    ...(inverse !== undefined ? { inverse } : {}),
+    ...(irreversible === true ? { irreversible: true } : {}),
   };
   return op;
+}
+
+/**
+ * Cross-reference the reversibility declarations once every op is parsed —
+ * reversibility as a first-class, fail-closed property (issue #18):
+ *
+ * - a MUTATING op must declare exactly one of `inverse` / `irreversible`. Neither
+ *   leaves rollback undecided; both is contradictory — either is a load error, so
+ *   no change can slip in without an explicit reversibility stance.
+ * - a READ-ONLY op must declare NEITHER: it changes nothing, so "how to undo it"
+ *   is meaningless and would only mislead.
+ * - an `inverse` must name an EXISTING op that is itself MUTATING. A dangling
+ *   inverse (no such op) or a read-only one (cannot undo a change) is a load
+ *   error — a declared rollback that could never actually roll back is a silent
+ *   hole, exactly what this validation exists to forbid.
+ *
+ * Throws {@link OperationLoadError} on the first violation, so the server fails
+ * closed rather than starting with an unsound reversibility claim in its registry.
+ */
+function validateReversibility(ops: readonly Operation[]): void {
+  const byName = new Map(ops.map((o) => [o.name, o]));
+  for (const op of ops) {
+    const hasInverse = op.inverse !== undefined;
+    const hasIrreversible = op.irreversible === true;
+
+    if (op.risk === "read-only") {
+      if (hasInverse || hasIrreversible) {
+        throw new OperationLoadError(
+          `${op.name} is read-only and must declare neither inverse nor irreversible ` +
+            `(a read-only op changes nothing, so it has no rollback)`,
+        );
+      }
+      continue;
+    }
+
+    if (hasInverse === hasIrreversible) {
+      throw new OperationLoadError(
+        `${op.name} is mutating and must declare exactly one of inverse / irreversible ` +
+          `(declares ${hasInverse ? "both" : "neither"})`,
+      );
+    }
+
+    if (hasInverse) {
+      const target = byName.get(op.inverse!);
+      if (target === undefined) {
+        throw new OperationLoadError(
+          `${op.name}.inverse "${op.inverse}" names no operation in the registry`,
+        );
+      }
+      if (target.risk !== "mutating") {
+        throw new OperationLoadError(
+          `${op.name}.inverse "${op.inverse}" is read-only — an inverse must itself be mutating ` +
+            `(a read-only op cannot undo a change)`,
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -219,6 +293,10 @@ export function parseOperations(yamlText: string): Operation[] {
   if (duplicates.length > 0) {
     throw new OperationLoadError(`duplicate operation name(s): ${duplicates.join(", ")}`);
   }
+
+  // Reversibility is cross-referential (an inverse points at another op), so it is
+  // checked here, after every op is parsed and the name set is known.
+  validateReversibility(ops);
 
   return ops;
 }
@@ -277,11 +355,15 @@ export function resolveOperation(op: Operation, args: Record<string, unknown> = 
 
   // A resolved op carries no params (its placeholders are gone), so the result is
   // built fresh rather than spreading `op` — nothing to drop, nothing left over.
+  // Reversibility is structural, not parameter-dependent, so it is preserved: a
+  // proposal must surface whether (and via which inverse) the change can be undone.
   return {
     name: op.name,
     risk: op.risk,
     command: substitute(op.command),
     ...(op.precheck !== undefined ? { precheck: substitute(op.precheck) } : {}),
+    ...(op.inverse !== undefined ? { inverse: op.inverse } : {}),
+    ...(op.irreversible === true ? { irreversible: true } : {}),
   };
 }
 

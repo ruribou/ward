@@ -33,6 +33,7 @@ operations:
 
   - name: sys_pull_image
     risk: mutating
+    inverse: sys_remove_image
     command: [docker, pull, "{image}"]
     precheck: [docker, images, "{image}"]
     params:
@@ -41,6 +42,7 @@ operations:
 
   - name: sys_remove_image
     risk: mutating
+    inverse: sys_pull_image
     command: [docker, rmi, "{image}"]
     precheck: [docker, images, "{image}"]
     params:

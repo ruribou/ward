@@ -48,6 +48,35 @@ describe("audit", () => {
     expect(entry.ms).toBeUndefined();
   });
 
+  it("records reversible:true on a mutating event that declared an inverse (#18)", () => {
+    const reversible: Operation = {
+      name: "sys_pull_image",
+      risk: "mutating",
+      command: ["docker", "pull", "alpine"],
+      inverse: "sys_remove_image",
+    };
+    expect(loggedEntry({ event: "proposed", op: reversible, proposalId: "p1" }).reversible).toBe(
+      true,
+    );
+  });
+
+  it("records reversible:false on a mutating event marked irreversible (#18)", () => {
+    const irreversible: Operation = {
+      name: "sys_reboot",
+      risk: "mutating",
+      command: ["sudo", "reboot"],
+      irreversible: true,
+    };
+    expect(loggedEntry({ event: "proposed", op: irreversible, proposalId: "p2" }).reversible).toBe(
+      false,
+    );
+  });
+
+  it("omits the reversibility field on a read-only event (it changes nothing)", () => {
+    const entry = loggedEntry({ event: "executed", op, result });
+    expect(entry.reversible).toBeUndefined();
+  });
+
   it("carries the proposalId through to the executed event after approval", () => {
     const entry = loggedEntry({ event: "executed", op, result, proposalId: "p7" });
     expect(entry).toMatchObject({ event: "executed", proposalId: "p7", exitCode: 0 });

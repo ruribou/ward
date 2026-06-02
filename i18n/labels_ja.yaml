@@ -40,6 +40,9 @@ proposal:
     （保留中は ward list で確認。AI に承認ツールはありません——AI が代わりに承認することはできません。）
   plan: "plan: {description}"
   precheck: "先に確認（read-only）: $ {precheck}"
+gate:
+  reversible: "巻き戻し可能: この変更は {inverse} で取り消せる。"
+  irreversible: "巻き戻し不可: この変更は取り消せない——逆操作はない。"
 cli:
   notFound: 'ward: 承認できません — 提案 "{id}" は存在しないか、既に使用済みです。'
   noPending: 保留中の提案はありません。
