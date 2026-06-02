@@ -9,6 +9,33 @@
 export type RiskClass = "read-only" | "mutating";
 
 /**
+ * A declared parameter of a parameterized operation: a single argv slot whose
+ * value the model may choose, but ONLY from a fixed enum allowlist.
+ *
+ * This is how a model-supplied argument enters a command without opening an
+ * injection surface. The model does not type a free-form string; it *selects* a
+ * member of `allow`, and every member of `allow` passed the same strict argv
+ * charset as a constant command element at load time. So a chosen value is, by
+ * construction, indistinguishable from a constant the registry author wrote —
+ * "no free-form arbitrary args" (issue #16) holds end to end.
+ *
+ * The shape is deliberately a mapping with an `allow:` list rather than a bare
+ * list, so a future, narrower constraint (e.g. a `type:`/`regex:` key) can be
+ * added alongside `allow` without changing this interface's existing meaning.
+ * This PR ships the enum allowlist only.
+ */
+export interface OpParam {
+  /** Param name, also the {token} used in `command`/`precheck` and the tool input key. */
+  readonly name: string;
+  /**
+   * The finite set of values the model may choose from. Non-empty; every member
+   * is charset-validated by the loader exactly like a constant command element,
+   * so substituting any of them can never smuggle a space or shell metacharacter.
+   */
+  readonly allow: readonly string[];
+}
+
+/**
  * A single capability ward can perform against the substrate (the NUC).
  *
  * Structure only — its human/LLM-facing title and description are not stored
@@ -21,19 +48,35 @@ export interface Operation {
   /** Risk classification — read by the guardrail gate before execution. */
   readonly risk: RiskClass;
   /**
-   * The exact command to run, as an argv array (NO shell).
-   * Every element is a constant in code: the model never supplies any part of it,
-   * so there is no command/argument injection surface.
+   * The command to run, as an argv array (NO shell).
+   *
+   * Every element is either a constant the registry author wrote or a `{token}`
+   * placeholder referencing a declared {@link params} entry. A constant is
+   * charset-validated at load time; a placeholder is replaced — before execution
+   * — by a model-chosen enum member that was itself charset-validated at load
+   * time. The model therefore never supplies any *part* of the command beyond
+   * selecting a pre-approved value, so there is no command/argument injection
+   * surface. A *resolved* operation (what actually runs, and what a proposal
+   * carries) holds no placeholders — see {@link resolveOperation}.
    */
   readonly command: readonly string[];
   /**
    * Optional read-only probe surfaced in a mutating op's proposal so the human
    * can verify current state before approving — half of the "plan" preview (the
    * other half is the effect description in i18n under `ops.<name>.plan`). Same
-   * argv shape and charset as `command`, validated identically by the loader, and
-   * only ever shown in the propose path — ward does not run it for you.
+   * argv shape, charset, and `{token}` placeholder rules as `command`, validated
+   * identically by the loader, and only ever shown in the propose path — ward
+   * does not run it for you.
    */
   readonly precheck?: readonly string[];
+  /**
+   * Optional parameter declarations. An op with no `params` takes no input and is
+   * a pure constant command, exactly as before. An op WITH `params` exposes each
+   * one as an enum at the tool boundary; a chosen value is validated against the
+   * enum and substituted into the `{token}` placeholders to produce a concrete,
+   * placeholder-free command before it ever reaches the executor.
+   */
+  readonly params?: readonly OpParam[];
 }
 
 /** Result of executing an operation against the substrate. */
@@ -73,7 +116,12 @@ export type AutonomyLevel = "read-only" | "approval";
 export interface Proposal {
   /** Stable, one-time handle the approver names, e.g. "p1". Never part of a command. */
   readonly id: string;
-  /** The operation that will run verbatim if this proposal is approved. */
+  /**
+   * The operation that will run verbatim if this proposal is approved. For a
+   * parameterized op this is the *resolved* operation — placeholders already
+   * substituted with the model's chosen, enum-validated values — so the approver
+   * sees and runs EXACTLY what was proposed; nothing is re-supplied at approve time.
+   */
   readonly op: Operation;
 }
 

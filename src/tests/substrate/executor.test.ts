@@ -83,6 +83,18 @@ describe("runOperation", () => {
     expect(r.stderr).toContain("[ward] killed by SIGKILL");
   });
 
+  it("refuses (throws, before spawning ssh) an argv element that fails the charset guard", async () => {
+    whenExecFile(null, "", "");
+    // Defense in depth: a surviving placeholder or any unsafe element must never run.
+    const unsafe: Operation = {
+      name: "nuc_pull",
+      risk: "mutating",
+      command: ["docker", "pull", "{image}"],
+    };
+    expect(() => runOperation(unsafe)).toThrow(/unsafe argv element/);
+    expect(mocked).not.toHaveBeenCalled();
+  });
+
   it("explains a maxBuffer overflow instead of reading as an ssh failure", async () => {
     whenExecFile(
       { code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER", killed: true, message: "maxBuffer exceeded" },
