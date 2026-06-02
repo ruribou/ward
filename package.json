@@ -24,7 +24,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

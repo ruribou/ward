@@ -1,0 +1,52 @@
+#!/bin/sh
+# ward pre-commit secret guard.
+#
+# This repo is PUBLIC: a secret reaches the world the moment it is pushed, so the
+# only real prevention is BEFORE the commit. This hook scans the staged change.
+#
+# If gitleaks is installed it runs the full engine; otherwise a self-contained
+# grep fallback covers private keys, common tokens, and real infra addresses
+# (RFC1918 / Tailscale CGNAT) — the shapes this project actually risks leaking.
+#
+# Enabled via `git config core.hooksPath .githooks` (run by `npm install`'s
+# prepare script). Bypass only if you are certain it is a false positive:
+#   git commit --no-verify
+set -eu
+
+# gitleaks itself, when present, is the full engine.
+if command -v gitleaks >/dev/null 2>&1; then
+  if [ -f .gitleaks.toml ]; then
+    gitleaks protect --staged --redact --no-banner --config .gitleaks.toml
+  else
+    gitleaks protect --staged --redact --no-banner
+  fi
+  exit 0
+fi
+
+# --- fallback (gitleaks not installed) ---------------------------------------
+# Added lines of the staged change, excluding the scanner files themselves (they
+# legitimately contain secret-LIKE regexes).
+added=$(git diff --cached --no-color -U0 --diff-filter=ACM \
+  -- . ':(exclude).githooks/' ':(exclude).gitleaks.toml' \
+  | grep -E '^\+[^+]' || true)
+[ -z "$added" ] && exit 0
+
+# High-signal credential shapes.
+TOKENS='BEGIN (OPENSSH|RSA|EC|DSA|PGP) PRIVATE KEY|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20}|AIza[0-9A-Za-z_-]{35}'
+# Real infra addresses: RFC1918 (10/8, 172.16/12, 192.168/16) + Tailscale CGNAT (100.64/10).
+INFRA_IP='(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3})([^0-9.]|$)'
+
+token_hits=$(printf '%s\n' "$added" | grep -nE "$TOKENS" || true)
+ip_hits=$(printf '%s\n' "$added" | grep -nE "$INFRA_IP" | grep -Ev '127\.0\.0\.1|0\.0\.0\.0' || true)
+
+if [ -n "$token_hits" ] || [ -n "$ip_hits" ]; then
+  echo "ward: pre-commit secret guard BLOCKED this commit." >&2
+  echo "      Staged content looks like a credential or a real infra address." >&2
+  echo "      (gitleaks not installed — using the built-in fallback scan.)" >&2
+  [ -n "$token_hits" ] && echo "  - token / private-key pattern in a staged line" >&2
+  [ -n "$ip_hits" ] && echo "  - real infra IP (RFC1918 / Tailscale CGNAT) in a staged line" >&2
+  echo "      Move it to a gitignored file (inventory / .env), or — if a false" >&2
+  echo "      positive — bypass with: git commit --no-verify" >&2
+  exit 1
+fi
+exit 0
