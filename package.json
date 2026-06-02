@@ -1,7 +1,7 @@
 {
   "name": "ward",
   "version": "0.1.0",
-  "description": "Operate your home infrastructure safely, in natural language, via Claude Code. M1: read-only NUC status over MCP.",
+  "description": "Operate your home infrastructure safely, in natural language, via Claude Code. M1: read-only host status over MCP.",
   "type": "module",
   "license": "MIT",
   "bin": {

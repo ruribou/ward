@@ -83,9 +83,9 @@ In short: ward makes the propose→approve gate _structural within its own surfa
 ward the _only_ surface is the deployment posture above — and the remaining structural
 layers in [#31](https://github.com/ruribou/ward/issues/31).
 
-## This generalizes beyond the NUC
+## This generalizes beyond a single host
 
-ward starts on a single NUC over SSH, but the isolation requirement is provider-agnostic.
+ward starts on a single host over SSH, but the isolation requirement is provider-agnostic.
 When the substrate becomes AWS / GCP / Azure, "do not give the AI the credentials" becomes
 "do not give the AI the cloud keys / IAM role," and "approve out-of-band" stays exactly the
 same. The core is a breach-proof approval-and-guardrail plane the AI cannot route around —

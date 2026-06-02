@@ -295,7 +295,7 @@ describe("ward MCP server — plan preview before approval (in-memory)", () => {
     expect(text).toContain("Plan:");
     expect(text).toContain("chosen image"); // from the en plan description
     expect(text).toContain("Verify first (read-only): $ docker images hello-world");
-    // The plan never runs the precheck — propose stays pure (nothing touches the NUC).
+    // The plan never runs the precheck — propose stays pure (nothing touches the host).
     expect(runOperation).not.toHaveBeenCalled();
   });
 

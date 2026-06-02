@@ -55,7 +55,7 @@ guarantees come from structure, not trust:
 - **A plan with every proposal.** A proposal shows more than the command: a plain-language
   description of what will change, and a read-only command you can run first to check the
   current state — so approval is _informed_, not a rubber stamp. Building the plan never
-  touches the NUC.
+  touches the host.
 - **Constant commands, no shell.** Commands run as fixed argument vectors (never through
   a shell), and the model supplies _no part_ of the command — not even an argument.
   There is no string for it to inject into.
