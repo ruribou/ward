@@ -6,8 +6,15 @@ import { config } from "../config.js";
 const COMMAND_TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 
-/** The strict argv charset — kept in lockstep with the loader's ARG_RE. */
-const ARG_RE = /^[A-Za-z0-9_.-]+$/;
+/**
+ * The broad backstop charset for the final argv — kept in lockstep with the
+ * loader's SAFE_ARG_RE. Adds only `:` `/` `%` to the strict token set (so a
+ * resolved port/URL value passes), all of which are inert to a POSIX shell; it
+ * still rejects whitespace and every shell metacharacter, including the `{` `}` of
+ * an unsubstituted placeholder. ssh reassembles this argv into a remote command
+ * line run by a shell, which is why even this last gate excludes those characters.
+ */
+const SAFE_ARG_RE = /^[A-Za-z0-9_.:/%-]+$/;
 
 /**
  * Runs an operation's command on the substrate (the host) over SSH.
@@ -34,7 +41,7 @@ const ARG_RE = /^[A-Za-z0-9_.-]+$/;
  */
 export function runOperation(op: Operation): Promise<ExecResult> {
   for (const part of op.command) {
-    if (!ARG_RE.test(part)) {
+    if (!SAFE_ARG_RE.test(part)) {
       throw new Error(
         `ward: refusing to execute ${op.name} — unsafe argv element ${JSON.stringify(part)}`,
       );

@@ -26,10 +26,51 @@ import type { Operation, OpParam, RiskClass } from "../types.js";
  * At call time the model may only select an enum member (see {@link
  * resolveOperation}), so a chosen value is indistinguishable from a constant the
  * author wrote — no free-form arguments, and nothing untrusted reaches argv.
+ *
+ * Two-tier charset (issue #49). The strict {@link ARG_RE} (`A-Za-z0-9_.-`) is the
+ * default for constants and enum members, and it forbids `:` and `/` — so a port
+ * mapping (`8080:80`) or a localhost URL can't be expressed. A param may instead
+ * carry a `type` (one of {@link PARAM_TYPES}) that widens its members to a fixed
+ * *shape* (a port, a localhost URL) which uses `:`/`/`. That widening never
+ * reaches a shell metacharacter or whitespace: every value — typed or not, at load
+ * AND at resolution — must also pass {@link SAFE_ARG_RE}, the broad backstop that
+ * adds only `:` `/` `%` (all inert to a shell) to the strict set. The executor
+ * mirrors SAFE_ARG_RE on the final argv, so the loader/executor double-check holds:
+ * both sides widened together, to the same backstop, never one alone.
  */
 
 const NAME_RE = /^sys_[a-z]+(_[a-z]+)*$/;
+/** The strict argv charset: constants and (untyped) enum members. No `:` or `/`. */
 const ARG_RE = /^[A-Za-z0-9_.-]+$/;
+/**
+ * The broad backstop charset. A superset of {@link ARG_RE} that adds only `:` `/`
+ * `%` — characters that are ordinary (non-special) to a POSIX shell, so they are
+ * safe even though ward's executor reassembles argv into a remote `ssh` command
+ * line. It still excludes whitespace and every shell metacharacter (; | & $ ( ) `
+ * < > { } [ ] * ? ~ ' " \ space). EVERY value that reaches argv must pass this,
+ * regardless of its param `type`, so a permissive type pattern cannot open an
+ * injection. Kept in lockstep with the executor's own SAFE_ARG_RE.
+ */
+const SAFE_ARG_RE = /^[A-Za-z0-9_.:/%-]+$/;
+/**
+ * Named per-param value types (issue #49): a vetted, anchored pattern a param's
+ * `type` selects, used to validate that param's enum members in place of the
+ * strict {@link ARG_RE}. Each pattern is itself a subset of {@link SAFE_ARG_RE}
+ * (only digits, letters, `.` `_` `-` `:` `/` `%`), and members are checked against
+ * SAFE_ARG_RE too, so adding a type can never widen the charset past the backstop.
+ * A new type is a vetted code change here — deliberately not free-form YAML regex.
+ */
+const PARAM_TYPES = new Map<string, RegExp>([
+  // host:container port mapping, e.g. 8080:80.
+  ["port", /^[0-9]+:[0-9]+$/],
+  // http(s) URL restricted to the loopback host (no other host is reachable), with
+  // an optional port and path — no query string (`?`/`&`/`=` are shell-unsafe).
+  ["url", /^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?(\/[A-Za-z0-9._%-]*)*$/],
+]);
+/** The charset a param's members are held to: its `type` pattern, else strict ARG_RE. */
+function memberCharset(type: string | undefined): RegExp {
+  return type === undefined ? ARG_RE : (PARAM_TYPES.get(type) ?? ARG_RE);
+}
 /** A param name and the {token} that references it, e.g. `image` / `{image}`. */
 const PARAM_NAME_RE = /^[a-z][a-z0-9_]*$/;
 /** An argv element that is exactly a placeholder, e.g. `{image}`. Its inner name is captured. */
@@ -109,10 +150,13 @@ function validateArgv(
 
 /**
  * Validate an operation's `params` declarations: a list of {@link OpParam}, each
- * a mapping with a safe `name` and a non-empty `allow` enum whose every member
- * passes the same charset guard as a constant command element. Rejects duplicate
- * param names. Returns the parsed params keyed by name for the caller's
- * cross-checks against the placeholders actually used.
+ * a mapping with a safe `name`, an optional `type` naming a known {@link
+ * PARAM_TYPES} validator, and a non-empty `allow` enum. Every member passes its
+ * param's charset — the `type` pattern if one is set, else the strict {@link
+ * ARG_RE} — AND the broad {@link SAFE_ARG_RE} backstop, so a typed member can use
+ * `:`/`/` but still never a space or shell metacharacter. Rejects duplicate param
+ * names. Returns the parsed params keyed by name for the caller's cross-checks
+ * against the placeholders actually used.
  */
 function validateParams(value: unknown, name: string): Map<string, OpParam> {
   if (!Array.isArray(value)) {
@@ -130,6 +174,15 @@ function validateParams(value: unknown, name: string): Map<string, OpParam> {
     if (params.has(paramName)) {
       throw new OperationLoadError(`${name}.params has duplicate parameter "${paramName}"`);
     }
+    const typeRaw = obj.type;
+    if (typeRaw !== undefined && (typeof typeRaw !== "string" || !PARAM_TYPES.has(typeRaw))) {
+      throw new OperationLoadError(
+        `${name}.params.${paramName}.type ${JSON.stringify(typeRaw)} is not a known type ` +
+          `(one of [${[...PARAM_TYPES.keys()].join(", ")}])`,
+      );
+    }
+    const type = typeRaw as string | undefined;
+    const charset = memberCharset(type);
     const allowRaw = obj.allow;
     if (!Array.isArray(allowRaw) || allowRaw.length === 0) {
       throw new OperationLoadError(
@@ -138,15 +191,19 @@ function validateParams(value: unknown, name: string): Map<string, OpParam> {
     }
     const allow: string[] = [];
     for (const member of allowRaw) {
-      if (typeof member !== "string" || !ARG_RE.test(member)) {
+      // A member must match its param's charset AND the broad backstop: the charset
+      // pins the shape (a token, a port, a URL); the backstop guarantees no space or
+      // shell metacharacter regardless of how the (vetted) type pattern is written.
+      if (typeof member !== "string" || !charset.test(member) || !SAFE_ARG_RE.test(member)) {
         throw new OperationLoadError(
           `${name}.params.${paramName}.allow has an unsafe value ${JSON.stringify(member)} — ` +
-            `only ${ARG_RE} is allowed (no spaces or shell metacharacters)`,
+            `must match ${charset}${type !== undefined ? ` (type ${type})` : ""} ` +
+            `and contain no spaces or shell metacharacters`,
         );
       }
       allow.push(member);
     }
-    params.set(paramName, { name: paramName, allow });
+    params.set(paramName, { name: paramName, allow, ...(type !== undefined ? { type } : {}) });
   }
   return params;
 }
@@ -312,9 +369,11 @@ export function parseOperations(yamlText: string): Operation[] {
  * an empty argument set and is returned unchanged.
  *
  * Defense in depth: even though `allow` members were charset-validated at load
- * time, every substituted value is re-checked against ARG_RE here, so a chosen
- * value can never be anything but a safe argv element. The executor asserts the
- * same on the final argv — two independent checks guarding the same invariant.
+ * time, every substituted value is re-checked here against BOTH its param's
+ * charset (the `type` pattern, else strict ARG_RE) and the broad SAFE_ARG_RE
+ * backstop, so a chosen value can never be anything but a safe argv element. The
+ * executor asserts SAFE_ARG_RE on the final argv too — independent checks guarding
+ * the same invariant.
  */
 export function resolveOperation(op: Operation, args: Record<string, unknown> = {}): Operation {
   const params = op.params ?? [];
@@ -337,7 +396,7 @@ export function resolveOperation(op: Operation, args: Record<string, unknown> = 
           `(got ${JSON.stringify(value)})`,
       );
     }
-    if (!ARG_RE.test(value)) {
+    if (!memberCharset(param.type).test(value) || !SAFE_ARG_RE.test(value)) {
       // Unreachable for a loaded op (load-time charset guard), but asserted anyway:
       // resolution must never let anything but a safe argv element through.
       throw new ParamResolutionError(
