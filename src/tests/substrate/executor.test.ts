@@ -7,7 +7,7 @@ import { runOperation } from "../../substrate/executor.js";
 import type { Operation } from "../../types.js";
 
 const op: Operation = {
-  name: "nuc_disk",
+  name: "sys_disk",
   risk: "read-only",
   command: ["df", "-h"],
 };
@@ -87,7 +87,7 @@ describe("runOperation", () => {
     whenExecFile(null, "", "");
     // Defense in depth: a surviving placeholder or any unsafe element must never run.
     const unsafe: Operation = {
-      name: "nuc_pull",
+      name: "sys_pull_image",
       risk: "mutating",
       command: ["docker", "pull", "{image}"],
     };

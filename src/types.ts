@@ -43,7 +43,7 @@ export interface OpParam {
  * the active locale when the tool is registered.
  */
 export interface Operation {
-  /** MCP tool name, e.g. "nuc_disk". Also the i18n key for its title/description. */
+  /** MCP tool name, e.g. "sys_disk". Also the i18n key for its title/description. */
   readonly name: string;
   /** Risk classification — read by the guardrail gate before execution. */
   readonly risk: RiskClass;

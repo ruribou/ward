@@ -6,7 +6,7 @@ import { ProposalStore } from "../../guardrail/proposals.js";
 import type { Operation } from "../../types.js";
 
 const op: Operation = {
-  name: "nuc_reboot",
+  name: "sys_reboot",
   risk: "mutating",
   command: ["sudo", "reboot"],
 };

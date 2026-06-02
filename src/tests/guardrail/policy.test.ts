@@ -27,8 +27,8 @@ describe("parsePolicy", () => {
   });
 
   it("parses per-op overrides keyed by op then level", () => {
-    const p = parsePolicy(withOverrides("  nuc_pull:\n    approval: deny\n"));
-    expect(p.overrides.nuc_pull).toEqual({ approval: "deny" });
+    const p = parsePolicy(withOverrides("  sys_pull_image:\n    approval: deny\n"));
+    expect(p.overrides.sys_pull_image).toEqual({ approval: "deny" });
   });
 
   it.each([
@@ -50,7 +50,10 @@ describe("parsePolicy", () => {
       "an unknown risk class",
       "defaults:\n  read-only:\n    read-only: allow\n    mutating: deny\n    destructive: allow\n  approval:\n    read-only: allow\n    mutating: require-approval\n",
     ],
-    ["an unknown level in an override", withOverrides("  nuc_pull:\n    autonomous: allow\n")],
+    [
+      "an unknown level in an override",
+      withOverrides("  sys_pull_image:\n    autonomous: allow\n"),
+    ],
   ])("fails closed on %s", (_label, yaml) => {
     expect(() => parsePolicy(yaml)).toThrow(PolicyLoadError);
   });
@@ -60,23 +63,25 @@ describe("decide", () => {
   const p = parsePolicy(VALID);
 
   it("applies the default matrix", () => {
-    expect(decide(p, "read-only", "read-only", "nuc_disk")).toBe("allow");
-    expect(decide(p, "read-only", "mutating", "nuc_pull")).toBe("deny");
-    expect(decide(p, "approval", "read-only", "nuc_disk")).toBe("allow");
-    expect(decide(p, "approval", "mutating", "nuc_pull")).toBe("require-approval");
+    expect(decide(p, "read-only", "read-only", "sys_disk")).toBe("allow");
+    expect(decide(p, "read-only", "mutating", "sys_pull_image")).toBe("deny");
+    expect(decide(p, "approval", "read-only", "sys_disk")).toBe("allow");
+    expect(decide(p, "approval", "mutating", "sys_pull_image")).toBe("require-approval");
   });
 
   it("lets a per-op override win over the default", () => {
-    const withOverride = parsePolicy(withOverrides("  nuc_pull:\n    approval: deny\n"));
-    expect(decide(withOverride, "approval", "mutating", "nuc_pull")).toBe("deny");
+    const withOverride = parsePolicy(withOverrides("  sys_pull_image:\n    approval: deny\n"));
+    expect(decide(withOverride, "approval", "mutating", "sys_pull_image")).toBe("deny");
     // a different op is unaffected
-    expect(decide(withOverride, "approval", "mutating", "nuc_rmi")).toBe("require-approval");
+    expect(decide(withOverride, "approval", "mutating", "sys_remove_image")).toBe(
+      "require-approval",
+    );
   });
 
   it("denies anything the policy does not cover (fail-closed)", () => {
     // An autonomy level the policy never declares decides to deny.
-    expect(decide(p, "autonomous" as never, "read-only", "nuc_disk")).toBe("deny");
+    expect(decide(p, "autonomous" as never, "read-only", "sys_disk")).toBe("deny");
     const empty: PolicyData = { defaults: {}, overrides: {} };
-    expect(decide(empty, "approval", "read-only", "nuc_disk")).toBe("deny");
+    expect(decide(empty, "approval", "read-only", "sys_disk")).toBe("deny");
   });
 });
