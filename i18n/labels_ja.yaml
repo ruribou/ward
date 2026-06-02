@@ -31,6 +31,9 @@ ops:
     title: イメージ削除
     description: ホストから Docker イメージを削除する（docker rmi）。許可リストから選ぶ（image — hello-world / alpine / busybox / nginx のいずれか）。sys_pull_image の逆＝巻き戻し操作。書き込み操作——承認が要る。
     plan: 選んだイメージをホストのローカル Docker イメージストアから削除する。無ければ何も起きない（no-op）。sys_pull_image で巻き戻せる。
+  sys_container_logs:
+    title: コンテナログ
+    description: Docker コンテナの直近 200 行のログ（docker logs --tail 200）を返す。許可リストから選ぶ（container — web / nginx のいずれか）。read-only——サービスの動作確認や失敗原因の調査に。
 proposal:
   notice: |-
     提案 {id} — この操作はホストを変更します（risk: {risk}）。人間が承認するまで実行されません。

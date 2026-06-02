@@ -48,3 +48,10 @@ operations:
     params:
       - name: image
         allow: [hello-world, alpine, busybox, nginx]
+
+  - name: sys_container_logs
+    risk: read-only
+    command: [docker, logs, --tail, "200", "{container}"]
+    params:
+      - name: container
+        allow: [web, nginx]
