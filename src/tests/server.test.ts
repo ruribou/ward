@@ -282,6 +282,68 @@ describe("ward MCP server — parameterized op with an enum allowlist (in-memory
   });
 });
 
+describe("ward MCP server — fixed port publish + HTTP check (#49, real registry)", () => {
+  it("stages sys_run_container's proposal with the resolved fixed-port command", async () => {
+    const runOperation = vi.fn(async () => fakeResult());
+    const proposals = tempStore();
+    const client = await connect({
+      autonomy: "approval",
+      runOperation,
+      audit: () => {},
+      proposals,
+    });
+
+    const text = textOf(
+      await client.callTool({
+        name: "sys_run_container",
+        arguments: { name: "web", publish: "8080:80", image: "nginx" },
+      }),
+    );
+    expect(text).toContain("docker run -d --name web -p 8080:80 nginx");
+    expect(runOperation).not.toHaveBeenCalled(); // mutating: proposed, not run
+    expect(proposals.get("p1")?.op.command).toEqual([
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "web",
+      "-p",
+      "8080:80",
+      "nginx",
+    ]);
+  });
+
+  it("runs sys_http_check directly (read-only) against the allowlisted localhost URL", async () => {
+    const runOperation = vi.fn(async (op: Operation) => {
+      expect(op.command).toEqual([
+        "curl",
+        "-sS",
+        "-I",
+        "--max-time",
+        "5",
+        "http://localhost:8080/",
+      ]);
+      return fakeResult({ stdout: "HTTP/1.1 200 OK" });
+    });
+    const client = await connect({ autonomy: "approval", runOperation, audit: () => {} });
+
+    const res = await client.callTool({
+      name: "sys_http_check",
+      arguments: { url: "http://localhost:8080/" },
+    });
+    expect(runOperation).toHaveBeenCalledOnce(); // read-only executes, no gate
+    expect(textOf(res)).toContain("200 OK");
+  });
+
+  it("exposes sys_http_check even at the read-only floor, with its URL enum", async () => {
+    const client = await connect({ runOperation: async () => fakeResult(), audit: () => {} });
+    const tool = (await client.listTools()).tools.find((t) => t.name === "sys_http_check");
+    expect(tool).toBeDefined(); // read-only → reachable at the safe floor
+    const url = (tool?.inputSchema?.properties as Record<string, { enum?: string[] }>).url;
+    expect(url?.enum).toContain("http://localhost:8080/");
+  });
+});
+
 describe("ward MCP server — reversibility surfaced in the proposal (#18)", () => {
   // A pinned registry that declares both stances: a reversible op naming its
   // inverse and an irreversible one. Mutual inverse keeps the (hand-built) ops

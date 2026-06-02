@@ -20,9 +20,8 @@ export type RiskClass = "read-only" | "mutating";
  * "no free-form arbitrary args" (issue #16) holds end to end.
  *
  * The shape is deliberately a mapping with an `allow:` list rather than a bare
- * list, so a future, narrower constraint (e.g. a `type:`/`regex:` key) can be
- * added alongside `allow` without changing this interface's existing meaning.
- * This PR ships the enum allowlist only.
+ * list, so a narrower constraint (the `type:` key) lives alongside `allow`
+ * without changing this interface's existing meaning.
  */
 export interface OpParam {
   /** Param name, also the {token} used in `command`/`precheck` and the tool input key. */
@@ -33,6 +32,23 @@ export interface OpParam {
    * so substituting any of them can never smuggle a space or shell metacharacter.
    */
   readonly allow: readonly string[];
+  /**
+   * Optional per-param value *type* (issue #49). A param's enum members are
+   * normally held to the strict argv charset (`^[A-Za-z0-9_.-]+$`), which forbids
+   * `:` and `/` — so a port mapping (`8080:80`) or a localhost URL cannot be an
+   * allowlist member. A `type` names a vetted validator (defined in the loader,
+   * e.g. `port`, `url`) that members are checked against instead: it WIDENS which
+   * characters a member may use, but only to a fixed shape, and never to a space
+   * or shell metacharacter.
+   *
+   * The model still only *selects* a member of `allow` — `type` does not open
+   * free-form input; it only lets the human-written allowlist express values the
+   * strict token charset can't. Every typed member is ALSO held to a broad
+   * backstop charset that excludes whitespace and every shell metacharacter, so a
+   * buggy type pattern still cannot smuggle an injection. Absent `type`, members
+   * keep the strict token charset — existing ops are unchanged.
+   */
+  readonly type?: string;
 }
 
 /**

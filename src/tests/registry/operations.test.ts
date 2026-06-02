@@ -48,7 +48,9 @@ describe("operations registry", () => {
       const args = Object.fromEntries((op.params ?? []).map((p) => [p.name, p.allow[0]!]));
       const resolved = resolveOperation(op, args);
       for (const part of [...resolved.command, ...(resolved.precheck ?? [])]) {
-        expect(part).toMatch(/^[A-Za-z0-9_.-]+$/);
+        // The broad backstop charset: a typed param (port/url) may substitute `:`/`/`,
+        // but never a space or shell metacharacter — the executor asserts the same.
+        expect(part).toMatch(/^[A-Za-z0-9_.:/%-]+$/);
       }
       expect(resolved.params).toBeUndefined();
     }
@@ -89,6 +91,28 @@ describe("operations registry", () => {
     const remove = operations.find((o) => o.name === "sys_remove_image");
     expect(pull?.inverse).toBe("sys_remove_image");
     expect(remove?.inverse).toBe("sys_pull_image");
+  });
+
+  it("publishes sys_run_container to a fixed host port via a typed port param (#49)", () => {
+    const run = operations.find((o) => o.name === "sys_run_container");
+    expect(run?.command).toContain("-p"); // a fixed mapping, not -P (random)
+    expect(run?.command).not.toContain("-P");
+    const publish = run?.params?.find((p) => p.name === "publish");
+    expect(publish?.type).toBe("port");
+    for (const member of publish?.allow ?? []) {
+      expect(member).toMatch(/^[0-9]+:[0-9]+$/); // every allowed mapping is host:container
+    }
+  });
+
+  it("adds sys_http_check as a read-only, allowlisted-localhost-URL probe (#49)", () => {
+    const check = operations.find((o) => o.name === "sys_http_check");
+    expect(check?.risk).toBe("read-only");
+    expect(check?.command[0]).toBe("curl");
+    const url = check?.params?.find((p) => p.name === "url");
+    expect(url?.type).toBe("url");
+    for (const member of url?.allow ?? []) {
+      expect(member).toMatch(/^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?\//);
+    }
   });
 });
 
@@ -275,6 +299,104 @@ operations:
     expect(() =>
       parseOperations(paramOp(`    params:\n      - name: Image\n        allow: [alpine]`)),
     ).toThrow(/params\[0\].name must match/);
+  });
+});
+
+describe("parseOperations — per-param value types (#49: ':' '/' via a typed allowlist)", () => {
+  // A read-only op (so no reversibility stance is needed) with one typed param.
+  const typed = (type: string, allow: string) => `
+operations:
+  - name: sys_probe
+    risk: read-only
+    command: [echo, "{value}"]
+    params:
+      - name: value
+        type: ${type}
+        allow: ${allow}
+`;
+  // The same op WITHOUT a type — members are held to the strict token charset.
+  const untyped = (allow: string) => `
+operations:
+  - name: sys_probe
+    risk: read-only
+    command: [echo, "{value}"]
+    params:
+      - name: value
+        allow: ${allow}
+`;
+
+  it("loads a port-typed param whose members contain a colon", () => {
+    const ops = parseOperations(typed("port", `["8080:80", "9090:90"]`));
+    expect(ops[0]?.params?.[0]).toEqual({
+      name: "value",
+      type: "port",
+      allow: ["8080:80", "9090:90"],
+    });
+  });
+
+  it("loads a url-typed param restricted to the loopback host (with port and path)", () => {
+    const ops = parseOperations(
+      typed("url", `["http://localhost:8080/", "http://127.0.0.1/health"]`),
+    );
+    expect(ops[0]?.params?.[0]?.type).toBe("url");
+    expect(ops[0]?.params?.[0]?.allow).toEqual([
+      "http://localhost:8080/",
+      "http://127.0.0.1/health",
+    ]);
+  });
+
+  it("rejects an unknown param type (a new type is a vetted code change, not free-form YAML)", () => {
+    expect(() => parseOperations(typed("regex", `["anything"]`))).toThrow(/is not a known type/);
+  });
+
+  it("STILL rejects a colon for an UNtyped param — the strict charset is not globally loosened", () => {
+    // The whole point of #49: `:` is reachable only through a vetted type, never by
+    // default. An untyped member with a colon must still fail to load.
+    expect(() => parseOperations(untyped(`["8080:80"]`))).toThrow(/has an unsafe value/);
+  });
+
+  it("rejects a port member that is not host:container shaped", () => {
+    expect(() => parseOperations(typed("port", `["8080"]`))).toThrow(/has an unsafe value/);
+    expect(() => parseOperations(typed("port", `["80:80:80"]`))).toThrow(/has an unsafe value/);
+    expect(() => parseOperations(typed("port", `["80:http"]`))).toThrow(/has an unsafe value/);
+  });
+
+  it("rejects a port member smuggling a shell metacharacter or space (injection guard)", () => {
+    expect(() => parseOperations(typed("port", `["80;reboot:80"]`))).toThrow(/has an unsafe value/);
+    expect(() => parseOperations(typed("port", `["80 80:80"]`))).toThrow(/has an unsafe value/);
+    expect(() => parseOperations(typed("port", `["$(reboot):80"]`))).toThrow(/has an unsafe value/);
+  });
+
+  it("rejects a url member pointing off the loopback host", () => {
+    expect(() => parseOperations(typed("url", `["http://evil.example.com/"]`))).toThrow(
+      /has an unsafe value/,
+    );
+    expect(() => parseOperations(typed("url", `["http://localhost.evil.com/"]`))).toThrow(
+      /has an unsafe value/,
+    );
+  });
+
+  it("rejects a url member smuggling a shell metacharacter (injection guard)", () => {
+    expect(() => parseOperations(typed("url", `["http://localhost/;reboot"]`))).toThrow(
+      /has an unsafe value/,
+    );
+    expect(() => parseOperations(typed("url", `["http://localhost/$(reboot)"]`))).toThrow(
+      /has an unsafe value/,
+    );
+    // a space splits one argv element into two on the remote command line
+    expect(() => parseOperations(typed("url", `["http://localhost/ a"]`))).toThrow(
+      /has an unsafe value/,
+    );
+  });
+
+  it("resolveOperation substitutes a chosen port member (carrying its colon) into the command", () => {
+    const op = parseOperations(typed("port", `["8080:80", "9090:90"]`))[0]!;
+    expect(resolveOperation(op, { value: "9090:90" }).command).toEqual(["echo", "9090:90"]);
+  });
+
+  it("resolveOperation rejects a typed value outside the enum allowlist", () => {
+    const op = parseOperations(typed("port", `["8080:80"]`))[0]!;
+    expect(() => resolveOperation(op, { value: "9999:99" })).toThrow(/must be one of/);
   });
 });
 

@@ -59,11 +59,14 @@ operations:
   - name: sys_run_container
     risk: mutating
     inverse: sys_remove_container
-    command: [docker, run, -d, --name, "{name}", -P, "{image}"]
+    command: [docker, run, -d, --name, "{name}", -p, "{publish}", "{image}"]
     precheck: [docker, images, "{image}"]
     params:
       - name: name
         allow: [web]
+      - name: publish
+        type: port
+        allow: ["8080:80"]
       - name: image
         allow: [nginx]
 
@@ -93,3 +96,11 @@ operations:
     params:
       - name: name
         allow: [web]
+
+  - name: sys_http_check
+    risk: read-only
+    command: [curl, -sS, -I, --max-time, "5", "{url}"]
+    params:
+      - name: url
+        type: url
+        allow: ["http://localhost:8080/"]

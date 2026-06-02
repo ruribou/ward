@@ -103,6 +103,35 @@ describe("runOperation", () => {
     expect(mocked).not.toHaveBeenCalled();
   });
 
+  it("accepts ':' and '/' in argv (a resolved port mapping / localhost URL) — #49", async () => {
+    whenExecFile(null, "200", "");
+    const run: Operation = {
+      name: "sys_run_container",
+      risk: "mutating",
+      command: ["docker", "run", "-d", "--name", "web", "-p", "8080:80", "nginx"],
+    };
+    const check: Operation = {
+      name: "sys_http_check",
+      risk: "read-only",
+      command: ["curl", "-sS", "-I", "--max-time", "5", "http://localhost:8080/"],
+    };
+    await expect(runOperation(run)).resolves.toMatchObject({ exitCode: 0 });
+    await expect(runOperation(check)).resolves.toMatchObject({ exitCode: 0 });
+    // The widened charset still passes the elements through to ssh verbatim.
+    expect(mocked.mock.calls.at(-1)?.[1]).toContain("http://localhost:8080/");
+  });
+
+  it("still refuses a space or shell metacharacter even with the widened charset — #49", () => {
+    whenExecFile(null, "", "");
+    // `:` is allowed now, but a space (word-split) or `;`/`$()`/backtick (shell
+    // metachars) would be interpreted by the remote shell after ssh reassembles argv.
+    for (const bad of ["8080:80 reboot", "80:80;reboot", "$(reboot):80", "http://localhost/`id`"]) {
+      const op: Operation = { name: "sys_probe", risk: "read-only", command: ["echo", bad] };
+      expect(() => runOperation(op)).toThrow(/unsafe argv element/);
+    }
+    expect(mocked).not.toHaveBeenCalled();
+  });
+
   it("explains a maxBuffer overflow instead of reading as an ssh failure", async () => {
     whenExecFile(
       { code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER", killed: true, message: "maxBuffer exceeded" },

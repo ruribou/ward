@@ -36,8 +36,8 @@ ops:
     description: Returns the last 200 log lines of a Docker container (docker logs --tail 200), chosen from a fixed allowlist (container — one of web, nginx). Read-only — for checking what a service is doing or why it failed.
   sys_run_container:
     title: Run container
-    description: Starts a Docker container in the background with its exposed ports published to random host ports (docker run -d --name <name> -P <image>), chosen from fixed allowlists (name — web; image — nginx). A write operation that changes the host's running state — it requires approval. Find the assigned host port with sys_containers.
-    plan: Creates and starts a container from the chosen image, publishing its exposed ports to random host ports. Reversible with sys_remove_container.
+    description: Starts a Docker container in the background, publishing a container port to a fixed host port (docker run -d --name <name> -p <publish> <image>), each chosen from a fixed allowlist (name — web; publish — 8080:80; image — nginx). A write operation that changes the host's running state — it requires approval. Verify it is serving with sys_http_check.
+    plan: Creates and starts a container from the chosen image, publishing its container port to the chosen fixed host port (e.g. host 8080 → container 80). Reversible with sys_remove_container.
   sys_remove_container:
     title: Remove container
     description: Force-removes a Docker container (docker rm -f), chosen from a fixed allowlist (name — web). The inverse of sys_run_container — a rollback. A write operation — it requires approval.
@@ -50,6 +50,9 @@ ops:
     title: Start container
     description: Starts a stopped Docker container (docker start), chosen from a fixed allowlist (name — web). The inverse of sys_stop_container. A write operation — it requires approval.
     plan: Starts the chosen stopped container. Reversible with sys_stop_container.
+  sys_http_check:
+    title: HTTP check
+    description: Sends an HTTP HEAD request to a fixed allowlisted localhost URL and returns the status line and headers (curl -sS -I --max-time 5 <url>; url — one of http://localhost:8080/). Read-only — for confirming a container started with sys_run_container is actually serving (a 200 status). Does not follow redirects, so it stays on the loopback host.
 proposal:
   notice: |-
     Proposal {id} — this operation changes the host (risk: {risk}). It will not run until a human approves it.

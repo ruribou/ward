@@ -36,8 +36,8 @@ ops:
     description: Docker コンテナの直近 200 行のログ（docker logs --tail 200）を返す。許可リストから選ぶ（container — web / nginx のいずれか）。read-only——サービスの動作確認や失敗原因の調査に。
   sys_run_container:
     title: コンテナ起動
-    description: Docker コンテナをバックグラウンドで起動し、公開ポートをホストのランダムなポートに割り当てる（docker run -d --name <name> -P <image>）。許可リストから選ぶ（name — web；image — nginx）。ホストの稼働状態を変える書き込み操作——承認が要る。割り当てポートは sys_containers で確認できる。
-    plan: 選んだイメージからコンテナを作成・起動し、公開ポートをホストのランダムなポートに割り当てる。sys_remove_container で巻き戻せる。
+    description: Docker コンテナをバックグラウンドで起動し、コンテナのポートをホストの固定ポートに公開する（docker run -d --name <name> -p <publish> <image>）。それぞれ許可リストから選ぶ（name — web；publish — 8080:80；image — nginx）。ホストの稼働状態を変える書き込み操作——承認が要る。応答しているかは sys_http_check で確認できる。
+    plan: 選んだイメージからコンテナを作成・起動し、コンテナのポートを選んだ固定ホストポートに公開する（例 ホスト 8080 → コンテナ 80）。sys_remove_container で巻き戻せる。
   sys_remove_container:
     title: コンテナ削除
     description: Docker コンテナを強制削除する（docker rm -f）。許可リストから選ぶ（name — web）。sys_run_container の逆＝巻き戻し操作。書き込み操作——承認が要る。
@@ -50,6 +50,9 @@ ops:
     title: コンテナ開始
     description: 停止中の Docker コンテナを起動する（docker start）。許可リストから選ぶ（name — web）。sys_stop_container の逆。書き込み操作——承認が要る。
     plan: 選んだ停止中のコンテナを起動する。sys_stop_container で巻き戻せる。
+  sys_http_check:
+    title: HTTP 確認
+    description: 許可リストの localhost URL に HTTP HEAD リクエストを送り、ステータス行とヘッダを返す（curl -sS -I --max-time 5 <url>；url — http://localhost:8080/ のいずれか）。read-only——sys_run_container で起動したコンテナが実際に応答している（200 か）の確認に。リダイレクトは追わないので loopback ホストから出ない。
 proposal:
   notice: |-
     提案 {id} — この操作はホストを変更します（risk: {risk}）。人間が承認するまで実行されません。
