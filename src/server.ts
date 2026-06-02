@@ -16,7 +16,7 @@ import type { AuditEntry, AutonomyLevel, ExecResult, Locale, Operation } from ".
 
 /**
  * Side effects and policy inputs, injected so the server wiring can be exercised
- * in-memory in tests without touching the substrate (no SSH, no real NUC) and at
+ * in-memory in tests without touching the substrate (no SSH, no real host) and at
  * any autonomy level — with whatever registry, autonomy, locale, and (file-backed)
  * proposal store a test pins.
  */

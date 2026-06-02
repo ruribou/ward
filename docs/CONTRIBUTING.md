@@ -9,7 +9,7 @@ guarantees true.
 
 ## What an operation is
 
-An **operation** is one capability ward can perform against the substrate (the NUC),
+An **operation** is one capability ward can perform against the substrate (the host),
 exposed to the AI as a single [MCP](https://modelcontextprotocol.io) tool. Every
 operation ward can ever run is declared in [`operations.yaml`](../operations.yaml) at the
 repo root — the single source of truth for "what ward can do". Nothing outside that
@@ -81,7 +81,7 @@ Under the `ops:` map, keyed by the operation name:
 ```yaml
 sys_docker_version:
   title: Docker version
-  description: Returns the Docker client and server versions on the NUC (docker version).
+  description: Returns the Docker client and server versions on the host (docker version).
 ```
 
 ### 3. Add Japanese labels in `i18n/labels_ja.yaml`
@@ -91,7 +91,7 @@ The **same keys**, translated:
 ```yaml
 sys_docker_version:
   title: Docker バージョン
-  description: NUC の Docker クライアント／サーバのバージョン（docker version）を返す。
+  description: ホストの Docker クライアント／サーバのバージョン（docker version）を返す。
 ```
 
 That is it for a read-only operation.
@@ -121,16 +121,16 @@ Following the existing `sys_pull_image` example:
 # i18n/labels_en.yaml — under ops:
 sys_pull_image:
   title: Pull image
-  description: Pulls the Docker image hello-world onto the NUC (docker pull). A write operation that changes the NUC's disk state — it requires approval. Check the result with sys_images.
-  plan: Adds the hello-world image to the NUC's local Docker image store. If it is already present this only refreshes it — nothing else changes. Reversible with sys_remove_image.
+  description: Pulls the Docker image hello-world onto the host (docker pull). A write operation that changes the host's disk state — it requires approval. Check the result with sys_images.
+  plan: Adds the hello-world image to the host's local Docker image store. If it is already present this only refreshes it — nothing else changes. Reversible with sys_remove_image.
 ```
 
 ```yaml
 # i18n/labels_ja.yaml — under ops:
 sys_pull_image:
   title: イメージ取得
-  description: NUC に Docker イメージ hello-world を取得する（docker pull）。NUC のディスク状態を変える書き込み操作——承認が要る。取得結果は sys_images で確認できる。
-  plan: hello-world イメージを NUC のローカル Docker イメージストアに追加する。既にあれば更新のみで他は変わらない。sys_remove_image で巻き戻せる。
+  description: ホストに Docker イメージ hello-world を取得する（docker pull）。ホストのディスク状態を変える書き込み操作——承認が要る。取得結果は sys_images で確認できる。
+  plan: hello-world イメージを ホストのローカル Docker イメージストアに追加する。既にあれば更新のみで他は変わらない。sys_remove_image で巻き戻せる。
 ```
 
 A good `plan` says what changes, whether it is a no-op when already done, and how to roll
@@ -177,4 +177,4 @@ gh pr create --base main
 ```
 
 Keep commit messages in English, conventional-commit style. In the PR, state whether the
-change touches the real NUC or is code/docs only.
+change touches the real host or is code/docs only.

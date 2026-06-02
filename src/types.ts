@@ -36,7 +36,7 @@ export interface OpParam {
 }
 
 /**
- * A single capability ward can perform against the substrate (the NUC).
+ * A single capability ward can perform against the substrate (the host).
  *
  * Structure only — its human/LLM-facing title and description are not stored
  * here. They live in i18n/labels_<locale>.yaml under `ops.<name>`, resolved for

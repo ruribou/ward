@@ -10,7 +10,7 @@ const MAX_OUTPUT_BYTES = 1024 * 1024;
 const ARG_RE = /^[A-Za-z0-9_.-]+$/;
 
 /**
- * Runs an operation's command on the substrate (the NUC) over SSH.
+ * Runs an operation's command on the substrate (the host) over SSH.
  *
  * Safety:
  * - Uses `execFile` (NOT a shell), so nothing is word-split or interpreted locally.

@@ -37,7 +37,15 @@ describe("runOperation", () => {
     expect(mocked).toHaveBeenCalledTimes(1);
     const call = mocked.mock.calls[0]!;
     expect(call[0]).toBe("ssh");
-    expect(call[1]).toEqual(["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "nuc", "df", "-h"]);
+    expect(call[1]).toEqual([
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=5",
+      "ward-host",
+      "df",
+      "-h",
+    ]);
   });
 
   it("maps a successful run to exitCode 0 and passes the output through", async () => {

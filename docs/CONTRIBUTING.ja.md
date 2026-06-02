@@ -6,7 +6,7 @@ ward の成長に協力いただきありがとうございます。このガイ
 
 ## 操作とは
 
-**操作（operation）** とは、ward が substrate（NUC）に対して実行できる 1 つの能力で、AI には単一の [MCP](https://modelcontextprotocol.io) ツールとして見えます。ward が実行しうる操作はすべて、リポジトリ直下の [`operations.yaml`](../operations.yaml) に宣言されています——「ward に何ができるか」の単一の真実源（single source of truth）です。この許可リストの外にあるものには一切到達できません。
+**操作（operation）** とは、ward が substrate（ホスト）に対して実行できる 1 つの能力で、AI には単一の [MCP](https://modelcontextprotocol.io) ツールとして見えます。ward が実行しうる操作はすべて、リポジトリ直下の [`operations.yaml`](../operations.yaml) に宣言されています——「ward に何ができるか」の単一の真実源（single source of truth）です。この許可リストの外にあるものには一切到達できません。
 
 各操作には **risk（リスク）** クラスがあり、ガードレールのゲートはこのクラスで判定します。
 
@@ -58,7 +58,7 @@ read-only 操作の構造変更はこれだけです：`name`、`risk`、定数 
 ```yaml
 sys_docker_version:
   title: Docker version
-  description: Returns the Docker client and server versions on the NUC (docker version).
+  description: Returns the Docker client and server versions on the host (docker version).
 ```
 
 ### 3. `i18n/labels_ja.yaml` に日本語ラベルを追加
@@ -68,7 +68,7 @@ sys_docker_version:
 ```yaml
 sys_docker_version:
   title: Docker バージョン
-  description: NUC の Docker クライアント／サーバのバージョン（docker version）を返す。
+  description: ホストの Docker クライアント／サーバのバージョン（docker version）を返す。
 ```
 
 read-only 操作はこれで完了です。
@@ -94,16 +94,16 @@ read-only 操作はこれで完了です。
 # i18n/labels_en.yaml — under ops:
 sys_pull_image:
   title: Pull image
-  description: Pulls the Docker image hello-world onto the NUC (docker pull). A write operation that changes the NUC's disk state — it requires approval. Check the result with sys_images.
-  plan: Adds the hello-world image to the NUC's local Docker image store. If it is already present this only refreshes it — nothing else changes. Reversible with sys_remove_image.
+  description: Pulls the Docker image hello-world onto the host (docker pull). A write operation that changes the host's disk state — it requires approval. Check the result with sys_images.
+  plan: Adds the hello-world image to the host's local Docker image store. If it is already present this only refreshes it — nothing else changes. Reversible with sys_remove_image.
 ```
 
 ```yaml
 # i18n/labels_ja.yaml — under ops:
 sys_pull_image:
   title: イメージ取得
-  description: NUC に Docker イメージ hello-world を取得する（docker pull）。NUC のディスク状態を変える書き込み操作——承認が要る。取得結果は sys_images で確認できる。
-  plan: hello-world イメージを NUC のローカル Docker イメージストアに追加する。既にあれば更新のみで他は変わらない。sys_remove_image で巻き戻せる。
+  description: ホストに Docker イメージ hello-world を取得する（docker pull）。ホストのディスク状態を変える書き込み操作——承認が要る。取得結果は sys_images で確認できる。
+  plan: hello-world イメージを ホストのローカル Docker イメージストアに追加する。既にあれば更新のみで他は変わらない。sys_remove_image で巻き戻せる。
 ```
 
 良い `plan` は、何が変わるか・既に済んでいる場合に no-op か・どう巻き戻すかを述べます——互いに逆操作である `sys_pull_image` / `sys_remove_image` を参照。
@@ -139,4 +139,4 @@ git push -u origin feat/your-change
 gh pr create --base main
 ```
 
-コミットメッセージは英語・conventional-commit 形式で。PR では、変更が実 NUC に触れるのか、コード／ドキュメントのみかを明記してください。
+コミットメッセージは英語・conventional-commit 形式で。PR では、変更が実 ホストに触れるのか、コード／ドキュメントのみかを明記してください。
