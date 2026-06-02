@@ -75,3 +75,21 @@ operations:
     params:
       - name: name
         allow: [web]
+
+  - name: sys_stop_container
+    risk: mutating
+    inverse: sys_start_container
+    command: [docker, stop, "{name}"]
+    precheck: [docker, ps]
+    params:
+      - name: name
+        allow: [web]
+
+  - name: sys_start_container
+    risk: mutating
+    inverse: sys_stop_container
+    command: [docker, start, "{name}"]
+    precheck: [docker, ps, -a]
+    params:
+      - name: name
+        allow: [web]

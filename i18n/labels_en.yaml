@@ -42,6 +42,14 @@ ops:
     title: Remove container
     description: Force-removes a Docker container (docker rm -f), chosen from a fixed allowlist (name — web). The inverse of sys_run_container — a rollback. A write operation — it requires approval.
     plan: Stops and removes the chosen container. If it does not exist this is a no-op. Reversible with sys_run_container.
+  sys_stop_container:
+    title: Stop container
+    description: Stops a running Docker container (docker stop), chosen from a fixed allowlist (name — web). A write operation — it requires approval. Reversible by starting it again.
+    plan: Stops the chosen container (it stays on the host and can be started again). Reversible with sys_start_container.
+  sys_start_container:
+    title: Start container
+    description: Starts a stopped Docker container (docker start), chosen from a fixed allowlist (name — web). The inverse of sys_stop_container. A write operation — it requires approval.
+    plan: Starts the chosen stopped container. Reversible with sys_stop_container.
 proposal:
   notice: |-
     Proposal {id} — this operation changes the host (risk: {risk}). It will not run until a human approves it.

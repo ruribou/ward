@@ -42,6 +42,14 @@ ops:
     title: コンテナ削除
     description: Docker コンテナを強制削除する（docker rm -f）。許可リストから選ぶ（name — web）。sys_run_container の逆＝巻き戻し操作。書き込み操作——承認が要る。
     plan: 選んだコンテナを停止・削除する。無ければ何も起きない（no-op）。sys_run_container で巻き戻せる。
+  sys_stop_container:
+    title: コンテナ停止
+    description: 稼働中の Docker コンテナを停止する（docker stop）。許可リストから選ぶ（name — web）。書き込み操作——承認が要る。再度起動すれば巻き戻せる。
+    plan: 選んだコンテナを停止する（ホストには残り、再起動できる）。sys_start_container で巻き戻せる。
+  sys_start_container:
+    title: コンテナ開始
+    description: 停止中の Docker コンテナを起動する（docker start）。許可リストから選ぶ（name — web）。sys_stop_container の逆。書き込み操作——承認が要る。
+    plan: 選んだ停止中のコンテナを起動する。sys_stop_container で巻き戻せる。
 proposal:
   notice: |-
     提案 {id} — この操作はホストを変更します（risk: {risk}）。人間が承認するまで実行されません。
