@@ -76,3 +76,19 @@ cli:
       ward approve <id>     保留中の提案を承認して実行
       ward reject <id>      提案を実行せずに破棄
       ward metrics [path]   監査ログを集計（成功率 / 介入率 / blast radius）
+      ward config ...       ユーザ設定（language, ssh_host）の表示・変更
+  config:
+    usage: |-
+      ward config — ~/.ward/config.yaml のユーザ設定を表示・変更する。
+      使い方:
+        ward config get            保存済みの設定（とファイルパス）を表示
+        ward config set <key> <v>  設定を変更（key: language | ssh_host）
+        ward config path           解決済みの設定ファイルパスを表示
+      注意: ssh_host は別名（~/.ssh/config で解決）のみ——実 IP やホスト名は書かない。
+    getHeader: "ward config — {path} の設定:"
+    valueLine: "  {key} = {value}"
+    unsetLine: "  {key} = (未設定 → 既定)"
+    setOk: "ward config: {key} = {value} を {path} に設定しました。"
+    unknownKey: 'ward config: "{key}" は設定できるキーではありません（language, ssh_host のいずれか）。'
+    invalidValue: "ward config: {error}"
+    path: "{path}"

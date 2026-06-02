@@ -285,3 +285,81 @@ describe("ward metrics — summarizing the audit log", () => {
     expect(cap.text()).toContain("cannot read");
   });
 });
+
+describe("ward config — user preferences in ~/.ward/config.yaml", () => {
+  let configFilePath: string;
+
+  beforeEach(() => {
+    configFilePath = join(tmpdir(), `ward-config-cli-${process.pid}-${counter}.yaml`);
+  });
+
+  afterEach(() => {
+    rmSync(configFilePath, { force: true });
+    rmSync(`${configFilePath}.tmp`, { force: true });
+  });
+
+  it("set writes the file; a later get reflects it", async () => {
+    const setCap = capture();
+    const setCode = await runCli(["config", "set", "language", "ja"], {
+      configFilePath,
+      out: setCap.out,
+    });
+    expect(setCode).toBe(0);
+    expect(setCap.text()).toContain(configFilePath);
+
+    const getCap = capture();
+    const getCode = await runCli(["config", "get"], { configFilePath, out: getCap.out });
+    expect(getCode).toBe(0);
+    expect(getCap.text()).toContain("language = ja");
+    expect(getCap.text()).toContain(configFilePath);
+  });
+
+  it("bare `config` behaves like `config get` and notes unset keys", async () => {
+    const cap = capture();
+    const code = await runCli(["config"], { configFilePath, out: cap.out });
+    expect(code).toBe(0);
+    expect(cap.text()).toContain("ssh_host");
+    expect(cap.text()).toContain("unset");
+  });
+
+  it("set of an unknown key prints an error and exits 2", async () => {
+    const cap = capture();
+    const code = await runCli(["config", "set", "autonomy", "approval"], {
+      configFilePath,
+      out: cap.out,
+    });
+    expect(code).toBe(2);
+    expect(cap.text()).toContain("autonomy");
+  });
+
+  it("set of an invalid value prints an error and exits 2", async () => {
+    const cap = capture();
+    const code = await runCli(["config", "set", "language", "fr"], {
+      configFilePath,
+      out: cap.out,
+    });
+    expect(code).toBe(2);
+    expect(cap.text().toLowerCase()).toContain("invalid");
+  });
+
+  it("set with a missing value prints the config usage and exits 2", async () => {
+    const cap = capture();
+    const code = await runCli(["config", "set", "language"], { configFilePath, out: cap.out });
+    expect(code).toBe(2);
+    expect(cap.text()).toContain("ward config");
+  });
+
+  it("path prints the resolved path and exits 0", async () => {
+    const cap = capture();
+    const code = await runCli(["config", "path"], { configFilePath, out: cap.out });
+    expect(code).toBe(0);
+    expect(cap.text()).toBe(configFilePath);
+  });
+
+  it("an unknown subcommand prints the config usage and exits 2", async () => {
+    const cap = capture();
+    const code = await runCli(["config", "frobnicate"], { configFilePath, out: cap.out });
+    expect(code).toBe(2);
+    expect(cap.text()).toContain("ward config");
+  });
+});
