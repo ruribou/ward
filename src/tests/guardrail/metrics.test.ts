@@ -16,23 +16,23 @@ const REJECT = (op: string, proposalId: string, ts: string) =>
   line({ ts, event: "rejected", op, risk: "mutating", proposalId });
 
 const log = [
-  RO("nuc_disk", 0, "2026-06-01T10:00:00Z"),
-  RO("nuc_disk", 0, "2026-06-01T10:01:00Z"),
-  RO("nuc_memory", 1, "2026-06-01T10:02:00Z"),
-  PROPOSE("nuc_pull", "p1", "2026-06-01T10:03:00Z"),
-  EXEC("nuc_pull", "p1", 0, "2026-06-01T10:04:00Z"),
-  PROPOSE("nuc_pull", "p2", "2026-06-01T10:05:00Z"),
-  EXEC("nuc_pull", "p2", 0, "2026-06-01T10:06:00Z"),
-  PROPOSE("nuc_rmi", "p3", "2026-06-01T10:07:00Z"),
-  EXEC("nuc_rmi", "p3", 1, "2026-06-01T10:08:00Z"),
-  PROPOSE("nuc_reboot", "p4", "2026-06-01T10:09:00Z"),
+  RO("sys_disk", 0, "2026-06-01T10:00:00Z"),
+  RO("sys_disk", 0, "2026-06-01T10:01:00Z"),
+  RO("sys_memory", 1, "2026-06-01T10:02:00Z"),
+  PROPOSE("sys_pull_image", "p1", "2026-06-01T10:03:00Z"),
+  EXEC("sys_pull_image", "p1", 0, "2026-06-01T10:04:00Z"),
+  PROPOSE("sys_pull_image", "p2", "2026-06-01T10:05:00Z"),
+  EXEC("sys_pull_image", "p2", 0, "2026-06-01T10:06:00Z"),
+  PROPOSE("sys_remove_image", "p3", "2026-06-01T10:07:00Z"),
+  EXEC("sys_remove_image", "p3", 1, "2026-06-01T10:08:00Z"),
+  PROPOSE("sys_reboot", "p4", "2026-06-01T10:09:00Z"),
 ].join("\n");
 
 describe("parseAuditLog", () => {
   it("skips blank lines without counting them, and counts unparseable / non-event lines", () => {
     const text = [
       "",
-      RO("nuc_disk", 0, "2026-06-01T10:00:00Z"),
+      RO("sys_disk", 0, "2026-06-01T10:00:00Z"),
       "{ not json",
       line({ ts: "t", event: "audit-write-failed", auditLog: "/x", error: "e" }),
       line({ event: "executed" }), // missing op/risk/ts
@@ -82,11 +82,11 @@ describe("summarize", () => {
 
   it("counts rejections and folds them into the resolution", () => {
     const withReject = summarize(
-      parseAuditLog([log, REJECT("nuc_reboot", "p4", "2026-06-01T10:10:00Z")].join("\n")),
+      parseAuditLog([log, REJECT("sys_reboot", "p4", "2026-06-01T10:10:00Z")].join("\n")),
     );
     expect(withReject.counts.rejected).toBe(1);
     expect(withReject.resolution).toEqual({ approved: 3, rejected: 1, pending: 0 });
-    expect(withReject.perOp.find((s) => s.op === "nuc_reboot")).toMatchObject({
+    expect(withReject.perOp.find((s) => s.op === "sys_reboot")).toMatchObject({
       proposed: 1,
       executed: 0,
       rejected: 1,
@@ -95,20 +95,20 @@ describe("summarize", () => {
 
   it("blast radius counts realised mutating executions by op", () => {
     expect(m.blastRadius.mutatingExecutions).toBe(3);
-    expect(m.blastRadius.byOp).toEqual({ nuc_pull: 2, nuc_rmi: 1 });
+    expect(m.blastRadius.byOp).toEqual({ sys_pull_image: 2, sys_remove_image: 1 });
     expect(m.blastRadius.reversibility).toBe("unknown");
   });
 
   it("per-op breakdown counts proposed/executed/ok/failed, sorted by name", () => {
     expect(m.perOp.map((s) => s.op)).toEqual([
-      "nuc_disk",
-      "nuc_memory",
-      "nuc_pull",
-      "nuc_reboot",
-      "nuc_rmi",
+      "sys_disk",
+      "sys_memory",
+      "sys_pull_image",
+      "sys_reboot",
+      "sys_remove_image",
     ]);
-    expect(m.perOp.find((s) => s.op === "nuc_rmi")).toEqual({
-      op: "nuc_rmi",
+    expect(m.perOp.find((s) => s.op === "sys_remove_image")).toEqual({
+      op: "sys_remove_image",
       risk: "mutating",
       proposed: 1,
       executed: 1,
@@ -116,7 +116,7 @@ describe("summarize", () => {
       failed: 1,
       rejected: 0,
     });
-    expect(m.perOp.find((s) => s.op === "nuc_reboot")).toMatchObject({
+    expect(m.perOp.find((s) => s.op === "sys_reboot")).toMatchObject({
       proposed: 1,
       executed: 0,
     });

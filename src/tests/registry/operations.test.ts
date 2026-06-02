@@ -24,13 +24,13 @@ describe("operations registry", () => {
 
   it("now includes the first mutating operations behind the approval gate", () => {
     const mutating = operations.filter((o) => o.risk === "mutating").map((o) => o.name);
-    expect(mutating).toContain("nuc_pull");
-    expect(mutating).toContain("nuc_rmi");
+    expect(mutating).toContain("sys_pull_image");
+    expect(mutating).toContain("sys_remove_image");
   });
 
-  it("uses the nuc_ tool-name convention", () => {
+  it("uses the sys_ tool-name convention", () => {
     for (const op of operations) {
-      expect(op.name).toMatch(/^nuc_[a-z]+$/);
+      expect(op.name).toMatch(/^sys_[a-z]+(_[a-z]+)*$/);
     }
   });
 
@@ -76,7 +76,7 @@ describe("operations registry", () => {
 describe("parseOperations (the loader guardrail)", () => {
   const valid = `
 operations:
-  - name: nuc_uptime
+  - name: sys_uptime
     risk: read-only
     command: [uptime]
 `;
@@ -84,13 +84,13 @@ operations:
   it("loads a well-formed registry", () => {
     const ops = parseOperations(valid);
     expect(ops).toHaveLength(1);
-    expect(ops[0]).toMatchObject({ name: "nuc_uptime", command: ["uptime"] });
+    expect(ops[0]).toMatchObject({ name: "sys_uptime", command: ["uptime"] });
   });
 
   it("rejects a command argument with a shell metacharacter", () => {
     const yaml = `
 operations:
-  - name: nuc_pwn
+  - name: sys_pwn
     risk: read-only
     command: [sh, -c, "rm -rf /"]
 `;
@@ -100,7 +100,7 @@ operations:
   it("rejects a path argument (slash is not in the safe charset)", () => {
     const yaml = `
 operations:
-  - name: nuc_cat
+  - name: sys_cat
     risk: read-only
     command: [cat, /etc/shadow]
 `;
@@ -110,7 +110,7 @@ operations:
   it("rejects an unknown risk class", () => {
     const yaml = `
 operations:
-  - name: nuc_uptime
+  - name: sys_uptime
     risk: yolo
     command: [uptime]
 `;
@@ -124,8 +124,8 @@ operations:
   it("rejects duplicate operation names", () => {
     const yaml = `
 operations:
-  - { name: nuc_uptime, risk: read-only, command: [uptime] }
-  - { name: nuc_uptime, risk: read-only, command: [uptime] }
+  - { name: sys_uptime, risk: read-only, command: [uptime] }
+  - { name: sys_uptime, risk: read-only, command: [uptime] }
 `;
     expect(() => parseOperations(yaml)).toThrow(/duplicate/);
   });
@@ -133,7 +133,7 @@ operations:
   it("loads an optional precheck and validates it like command", () => {
     const yaml = `
 operations:
-  - name: nuc_pull
+  - name: sys_pull_image
     risk: mutating
     command: [docker, pull, hello-world]
     precheck: [docker, images, hello-world]
@@ -148,7 +148,7 @@ operations:
   it("rejects a precheck with a shell metacharacter (same guard as command)", () => {
     const yaml = `
 operations:
-  - name: nuc_pull
+  - name: sys_pull_image
     risk: mutating
     command: [docker, pull, hello-world]
     precheck: [sh, -c, "rm -rf /"]
@@ -159,7 +159,7 @@ operations:
   it("rejects an empty precheck array", () => {
     const yaml = `
 operations:
-  - name: nuc_pull
+  - name: sys_pull_image
     risk: mutating
     command: [docker, pull, hello-world]
     precheck: []
@@ -171,7 +171,7 @@ operations:
 describe("parseOperations — parameterized operations (enum allowlist)", () => {
   const paramOp = (body: string) => `
 operations:
-  - name: nuc_pull
+  - name: sys_pull_image
     risk: mutating
     command: [docker, pull, "{image}"]
 ${body}
@@ -188,7 +188,7 @@ ${body}
   it("validates a placeholder used in precheck too", () => {
     const yaml = `
 operations:
-  - name: nuc_rmi
+  - name: sys_remove_image
     risk: mutating
     command: [docker, rmi, "{image}"]
     precheck: [docker, images, "{image}"]
@@ -220,7 +220,7 @@ operations:
   it("rejects a declared param that is never referenced", () => {
     const yaml = `
 operations:
-  - name: nuc_pull
+  - name: sys_pull_image
     risk: mutating
     command: [docker, pull, hello-world]
     params:
@@ -233,7 +233,7 @@ operations:
   it("rejects a duplicate param name", () => {
     const yaml = `
 operations:
-  - name: nuc_pull
+  - name: sys_pull_image
     risk: mutating
     command: [docker, pull, "{image}"]
     params:
@@ -255,7 +255,7 @@ operations:
 describe("resolveOperation — enforces the enum and substitutes (no placeholder survives)", () => {
   const op = parseOperations(`
 operations:
-  - name: nuc_pull
+  - name: sys_pull_image
     risk: mutating
     command: [docker, pull, "{image}"]
     precheck: [docker, images, "{image}"]
@@ -289,7 +289,7 @@ operations:
   it("returns a no-param op unchanged when given no arguments", () => {
     const plain = parseOperations(`
 operations:
-  - name: nuc_uptime
+  - name: sys_uptime
     risk: read-only
     command: [uptime]
 `)[0]!;

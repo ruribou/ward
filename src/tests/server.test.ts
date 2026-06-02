@@ -45,11 +45,11 @@ function textOf(res: unknown): string {
 
 /** A small registry with a mutating op, pinned so gate tests don't depend on the real one. */
 const fakeRegistry: readonly Operation[] = [
-  { name: "nuc_disk", risk: "read-only", command: ["df", "-h"] },
+  { name: "sys_disk", risk: "read-only", command: ["df", "-h"] },
   // No plan description and no precheck → its proposal carries no plan block.
-  { name: "nuc_reboot", risk: "mutating", command: ["sudo", "reboot"] },
+  { name: "sys_reboot", risk: "mutating", command: ["sudo", "reboot"] },
   // A precheck but no i18n plan description → only the precheck line is shown.
-  { name: "nuc_probe", risk: "mutating", command: ["touch", "marker"], precheck: ["ls", "marker"] },
+  { name: "sys_probe", risk: "mutating", command: ["touch", "marker"], precheck: ["ls", "marker"] },
 ];
 
 describe("ward MCP server (in-memory)", () => {
@@ -58,7 +58,7 @@ describe("ward MCP server (in-memory)", () => {
     const names = (await client.listTools()).tools.map((t) => t.name);
     const readOnly = operations.filter((o) => o.risk === "read-only").map((o) => o.name);
     expect(names.sort()).toEqual(readOnly.sort());
-    expect(names).not.toContain("nuc_pull");
+    expect(names).not.toContain("sys_pull_image");
     expect(names).not.toContain("ward_approve");
   });
 
@@ -78,11 +78,11 @@ describe("ward MCP server (in-memory)", () => {
     const audit = vi.fn();
     const client = await connect({ runOperation, audit });
 
-    const res = await client.callTool({ name: "nuc_disk", arguments: {} });
+    const res = await client.callTool({ name: "sys_disk", arguments: {} });
     expect(textOf(res)).toContain("$ df -h");
     expect(textOf(res)).toContain("(exit 0, 42ms)");
     expect(textOf(res)).toContain("USED 6%");
-    expect(seen.map((o) => o.name)).toEqual(["nuc_disk"]);
+    expect(seen.map((o) => o.name)).toEqual(["sys_disk"]);
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ event: "executed", op: seen[0] }));
   });
 
@@ -92,7 +92,7 @@ describe("ward MCP server (in-memory)", () => {
         fakeResult({ stdout: "", stderr: "permission denied", exitCode: 1 }),
       audit: () => {},
     });
-    const res = await client.callTool({ name: "nuc_uptime", arguments: {} });
+    const res = await client.callTool({ name: "sys_uptime", arguments: {} });
     expect(textOf(res)).toContain("permission denied");
     expect(textOf(res)).toContain("exit 1");
   });
@@ -103,7 +103,7 @@ describe("ward MCP server (in-memory)", () => {
         fakeResult({ stdout: "pulling layers", stderr: "Error: manifest unknown", exitCode: 1 }),
       audit: () => {},
     });
-    const text = textOf(await client.callTool({ name: "nuc_uptime", arguments: {} }));
+    const text = textOf(await client.callTool({ name: "sys_uptime", arguments: {} }));
     expect(text).toContain("pulling layers");
     expect(text).toContain("Error: manifest unknown");
     expect(text).toContain("exit 1");
@@ -114,7 +114,7 @@ describe("ward MCP server (in-memory)", () => {
       runOperation: async () => fakeResult({ stdout: "", stderr: "" }),
       audit: () => {},
     });
-    const res = await client.callTool({ name: "nuc_memory", arguments: {} });
+    const res = await client.callTool({ name: "sys_memory", arguments: {} });
     expect(textOf(res)).toContain("(no output)");
   });
 });
@@ -128,7 +128,7 @@ describe("ward MCP server — propose only, approval is out of band (in-memory)"
       audit: () => {},
     });
     const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names).toContain("nuc_reboot"); // it CAN propose
+    expect(names).toContain("sys_reboot"); // it CAN propose
     expect(names).not.toContain("ward_approve"); // but it has no way to approve
     expect(names.some((n) => n.includes("approve"))).toBe(false);
   });
@@ -145,7 +145,7 @@ describe("ward MCP server — propose only, approval is out of band (in-memory)"
       proposals,
     });
 
-    const res = await client.callTool({ name: "nuc_reboot", arguments: {} });
+    const res = await client.callTool({ name: "sys_reboot", arguments: {} });
     const text = textOf(res);
     expect(text).toContain("sudo reboot");
     expect(text).toContain("ward approve p1"); // human runs this in their terminal
@@ -160,7 +160,7 @@ describe("ward MCP server — propose only, approval is out of band (in-memory)"
     expect(proposals.get("p1")?.op.command).toEqual(["sudo", "reboot"]);
   });
 
-  it("stages the registry's real mutating op (nuc_pull) with its plan", async () => {
+  it("stages the registry's real mutating op (sys_pull_image) with its plan", async () => {
     const runOperation = vi.fn(async () => fakeResult());
     const proposals = tempStore();
     const client = await connect({
@@ -171,7 +171,7 @@ describe("ward MCP server — propose only, approval is out of band (in-memory)"
     });
 
     const text = textOf(
-      await client.callTool({ name: "nuc_pull", arguments: { image: "hello-world" } }),
+      await client.callTool({ name: "sys_pull_image", arguments: { image: "hello-world" } }),
     );
     expect(text).toContain("Proposal p1");
     expect(text).toContain("docker pull hello-world");
@@ -191,7 +191,7 @@ describe("ward MCP server — propose only, approval is out of band (in-memory)"
       audit: () => {},
     });
 
-    const text = textOf(await client.callTool({ name: "nuc_reboot", arguments: {} }));
+    const text = textOf(await client.callTool({ name: "sys_reboot", arguments: {} }));
     expect(text).toContain("提案 p1");
     expect(text).toContain("ward approve p1");
     expect(text).toContain("sudo reboot");
@@ -206,7 +206,7 @@ describe("ward MCP server — propose only, approval is out of band (in-memory)"
       audit: () => {},
     });
 
-    const res = await client.callTool({ name: "nuc_disk", arguments: {} });
+    const res = await client.callTool({ name: "sys_disk", arguments: {} });
     expect(runOperation).toHaveBeenCalledOnce();
     expect(textOf(res)).toContain("USED 6%");
   });
@@ -216,7 +216,7 @@ describe("ward MCP server — parameterized op with an enum allowlist (in-memory
   // A small parameterized mutating op, pinned so the test does not depend on the real registry.
   const paramRegistry: readonly Operation[] = [
     {
-      name: "nuc_pull",
+      name: "sys_pull_image",
       risk: "mutating",
       command: ["docker", "pull", "{image}"],
       precheck: ["docker", "images", "{image}"],
@@ -231,7 +231,7 @@ describe("ward MCP server — parameterized op with an enum allowlist (in-memory
       runOperation: async () => fakeResult(),
       audit: () => {},
     });
-    const tool = (await client.listTools()).tools.find((t) => t.name === "nuc_pull");
+    const tool = (await client.listTools()).tools.find((t) => t.name === "sys_pull_image");
     const image = (tool?.inputSchema?.properties as Record<string, { enum?: string[] }>).image;
     expect(image?.enum).toEqual(["hello-world", "alpine"]);
     expect(tool?.inputSchema?.required).toContain("image");
@@ -249,7 +249,7 @@ describe("ward MCP server — parameterized op with an enum allowlist (in-memory
     });
 
     const text = textOf(
-      await client.callTool({ name: "nuc_pull", arguments: { image: "alpine" } }),
+      await client.callTool({ name: "sys_pull_image", arguments: { image: "alpine" } }),
     );
     expect(text).toContain("docker pull alpine"); // resolved, not {image}
     expect(text).not.toContain("{image}");
@@ -272,7 +272,7 @@ describe("ward MCP server — parameterized op with an enum allowlist (in-memory
     // The MCP schema constraint surfaces an out-of-enum value as a tool error — the
     // handler never runs, so nothing is executed and nothing is staged.
     const res = (await client.callTool({
-      name: "nuc_pull",
+      name: "sys_pull_image",
       arguments: { image: "ubuntu" },
     })) as { isError?: boolean };
     expect(res.isError).toBe(true);
@@ -287,7 +287,10 @@ describe("ward MCP server — plan preview before approval (in-memory)", () => {
     const runOperation = vi.fn(async () => fakeResult());
     const client = await connect({ autonomy: "approval", runOperation, audit: () => {} });
 
-    const res = await client.callTool({ name: "nuc_pull", arguments: { image: "hello-world" } });
+    const res = await client.callTool({
+      name: "sys_pull_image",
+      arguments: { image: "hello-world" },
+    });
     const text = textOf(res);
     expect(text).toContain("Plan:");
     expect(text).toContain("chosen image"); // from the en plan description
@@ -305,7 +308,7 @@ describe("ward MCP server — plan preview before approval (in-memory)", () => {
     });
 
     const text = textOf(
-      await client.callTool({ name: "nuc_pull", arguments: { image: "hello-world" } }),
+      await client.callTool({ name: "sys_pull_image", arguments: { image: "hello-world" } }),
     );
     expect(text).toContain("plan:");
     expect(text).toContain("ローカル Docker イメージストアに追加"); // from the ja plan description
@@ -320,7 +323,7 @@ describe("ward MCP server — plan preview before approval (in-memory)", () => {
       audit: () => {},
     });
 
-    const text = textOf(await client.callTool({ name: "nuc_probe", arguments: {} }));
+    const text = textOf(await client.callTool({ name: "sys_probe", arguments: {} }));
     expect(text).toContain("Verify first (read-only): $ ls marker");
     expect(text).not.toContain("Plan:");
   });
@@ -333,7 +336,7 @@ describe("ward MCP server — plan preview before approval (in-memory)", () => {
       audit: () => {},
     });
 
-    const text = textOf(await client.callTool({ name: "nuc_reboot", arguments: {} }));
+    const text = textOf(await client.callTool({ name: "sys_reboot", arguments: {} }));
     expect(text).not.toContain("Plan:");
     expect(text).not.toContain("Verify first");
   });

@@ -1,36 +1,36 @@
 ops:
-  nuc_uptime:
+  sys_uptime:
     title: 稼働状況
     description: NUC の稼働時間とロードアベレージ（uptime）を返す。
-  nuc_disk:
+  sys_disk:
     title: ディスク使用量
     description: NUC のファイルシステム使用量（df -h）を返す。単一 SSD のため満杯は事故源——状態確認の最優先項目。
-  nuc_memory:
+  sys_memory:
     title: メモリ使用量
     description: NUC のメモリ／スワップ使用量（free -h）を返す。
-  nuc_containers:
+  sys_containers:
     title: 稼働中コンテナ
     description: NUC で稼働中の Docker コンテナ一覧（docker ps）を返す。
-  nuc_images:
+  sys_images:
     title: Docker イメージ
     description: NUC が保持する Docker イメージ一覧（docker images）を返す。
-  nuc_ports:
+  sys_listening_ports:
     title: 待ち受けポート
     description: NUC が待ち受けている TCP/UDP ソケット一覧（ss -tuln）を返す。公開面（攻撃面）の確認に。
-  nuc_network:
+  sys_network:
     title: ネットワーク
     description: NUC の各インターフェースの IP アドレス一覧（ip -br addr）を返す。
-  nuc_failed:
+  sys_failed_units:
     title: 失敗したサービス
     description: 起動・実行に失敗した systemd ユニット一覧（systemctl --failed）を返す。健全性の最初の確認に。
-  nuc_pull:
+  sys_pull_image:
     title: イメージ取得
-    description: NUC に Docker イメージを取得する（docker pull）。許可リストから選ぶ（image — hello-world / alpine / busybox / nginx のいずれか）。NUC のディスク状態を変える書き込み操作——承認が要る。取得結果は nuc_images で確認できる。
-    plan: 選んだイメージを NUC のローカル Docker イメージストアに追加する。既にあれば更新のみで他は変わらない。nuc_rmi で巻き戻せる。
-  nuc_rmi:
+    description: NUC に Docker イメージを取得する（docker pull）。許可リストから選ぶ（image — hello-world / alpine / busybox / nginx のいずれか）。NUC のディスク状態を変える書き込み操作——承認が要る。取得結果は sys_images で確認できる。
+    plan: 選んだイメージを NUC のローカル Docker イメージストアに追加する。既にあれば更新のみで他は変わらない。sys_remove_image で巻き戻せる。
+  sys_remove_image:
     title: イメージ削除
-    description: NUC から Docker イメージを削除する（docker rmi）。許可リストから選ぶ（image — hello-world / alpine / busybox / nginx のいずれか）。nuc_pull の逆＝巻き戻し操作。書き込み操作——承認が要る。
-    plan: 選んだイメージを NUC のローカル Docker イメージストアから削除する。無ければ何も起きない（no-op）。nuc_pull で巻き戻せる。
+    description: NUC から Docker イメージを削除する（docker rmi）。許可リストから選ぶ（image — hello-world / alpine / busybox / nginx のいずれか）。sys_pull_image の逆＝巻き戻し操作。書き込み操作——承認が要る。
+    plan: 選んだイメージを NUC のローカル Docker イメージストアから削除する。無ければ何も起きない（no-op）。sys_pull_image で巻き戻せる。
 proposal:
   notice: |-
     提案 {id} — この操作は NUC を変更します（risk: {risk}）。人間が承認するまで実行されません。

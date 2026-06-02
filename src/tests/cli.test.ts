@@ -10,7 +10,7 @@ import { ProposalStore } from "../guardrail/proposals.js";
 import { createServer } from "../server.js";
 import type { ExecResult, Operation } from "../types.js";
 
-const op: Operation = { name: "nuc_reboot", risk: "mutating", command: ["sudo", "reboot"] };
+const op: Operation = { name: "sys_reboot", risk: "mutating", command: ["sudo", "reboot"] };
 
 function fakeResult(over: Partial<ExecResult> = {}): ExecResult {
   return { stdout: "FAKE", stderr: "", exitCode: 0, ms: 1, ...over };
@@ -173,7 +173,7 @@ describe("end to end — AI proposes via MCP, human approves via CLI (shared sto
     await Promise.all([client.connect(ct), server.connect(st)]);
 
     // AI proposes — the server writes the RESOLVED op to the store but runs nothing.
-    await client.callTool({ name: "nuc_pull", arguments: { image: "hello-world" } });
+    await client.callTool({ name: "sys_pull_image", arguments: { image: "hello-world" } });
     expect(serverRun).not.toHaveBeenCalled();
 
     // Human approves out of band, in a separate process reading the same store.
@@ -229,18 +229,18 @@ describe("isEntrypoint — recognises the bin even when installed as a symlink",
 
 describe("ward metrics — summarizing the audit log", () => {
   const sampleLog = [
-    JSON.stringify({ ts: "t1", event: "executed", op: "nuc_disk", risk: "read-only", exitCode: 0 }),
+    JSON.stringify({ ts: "t1", event: "executed", op: "sys_disk", risk: "read-only", exitCode: 0 }),
     JSON.stringify({
       ts: "t2",
       event: "proposed",
-      op: "nuc_pull",
+      op: "sys_pull_image",
       risk: "mutating",
       proposalId: "p1",
     }),
     JSON.stringify({
       ts: "t3",
       event: "executed",
-      op: "nuc_pull",
+      op: "sys_pull_image",
       risk: "mutating",
       proposalId: "p1",
       exitCode: 0,

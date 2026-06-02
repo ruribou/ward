@@ -6,7 +6,7 @@ import { audit } from "../../guardrail/audit.js";
 import type { AuditEntry, ExecResult, Operation } from "../../types.js";
 
 const op: Operation = {
-  name: "nuc_disk",
+  name: "sys_disk",
   risk: "read-only",
   command: ["df", "-h"],
 };
@@ -31,7 +31,7 @@ describe("audit", () => {
     const entry = loggedEntry({ event: "executed", op, result });
     expect(entry).toMatchObject({
       event: "executed",
-      op: "nuc_disk",
+      op: "sys_disk",
       risk: "read-only",
       exitCode: 0,
       ms: 42,
@@ -43,7 +43,7 @@ describe("audit", () => {
 
   it("records a proposed event with its proposalId and no exit code", () => {
     const entry = loggedEntry({ event: "proposed", op, proposalId: "p1" });
-    expect(entry).toMatchObject({ event: "proposed", op: "nuc_disk", proposalId: "p1" });
+    expect(entry).toMatchObject({ event: "proposed", op: "sys_disk", proposalId: "p1" });
     expect(entry.exitCode).toBeUndefined();
     expect(entry.ms).toBeUndefined();
   });

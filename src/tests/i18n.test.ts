@@ -7,11 +7,11 @@ afterEach(() => {
 
 describe("i18n label loader", () => {
   it("resolves a dot-path key for the default locale (en)", () => {
-    expect(getLabel("ops.nuc_uptime.title")).toBe("Uptime");
+    expect(getLabel("ops.sys_uptime.title")).toBe("Uptime");
   });
 
   it("resolves the same key in another locale", () => {
-    expect(getLabel("ops.nuc_uptime.title", "ja")).toBe("稼働状況");
+    expect(getLabel("ops.sys_uptime.title", "ja")).toBe("稼働状況");
   });
 
   it("substitutes {var} placeholders", () => {
@@ -37,13 +37,13 @@ describe("i18n label loader", () => {
   });
 
   it("getLabelOr returns the label when present", () => {
-    expect(getLabelOr("ops.nuc_uptime.title", "fallback")).toBe("Uptime");
+    expect(getLabelOr("ops.sys_uptime.title", "fallback")).toBe("Uptime");
   });
 
   it("caches a locale across calls and reloads after a reset", () => {
-    expect(getLabel("ops.nuc_disk.title")).toBe("Disk usage");
-    expect(getLabel("ops.nuc_disk.title")).toBe("Disk usage"); // cache hit
+    expect(getLabel("ops.sys_disk.title")).toBe("Disk usage");
+    expect(getLabel("ops.sys_disk.title")).toBe("Disk usage"); // cache hit
     _resetLabelCache();
-    expect(getLabel("ops.nuc_disk.title")).toBe("Disk usage"); // reload
+    expect(getLabel("ops.sys_disk.title")).toBe("Disk usage"); // reload
   });
 });

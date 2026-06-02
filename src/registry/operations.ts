@@ -28,7 +28,7 @@ import type { Operation, OpParam, RiskClass } from "../types.js";
  * author wrote — no free-form arguments, and nothing untrusted reaches argv.
  */
 
-const NAME_RE = /^nuc_[a-z]+$/;
+const NAME_RE = /^sys_[a-z]+(_[a-z]+)*$/;
 const ARG_RE = /^[A-Za-z0-9_.-]+$/;
 /** A param name and the {token} that references it, e.g. `image` / `{image}`. */
 const PARAM_NAME_RE = /^[a-z][a-z0-9_]*$/;

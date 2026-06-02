@@ -5,7 +5,7 @@ import { operations } from "../../registry/operations.js";
 import type { Operation } from "../../types.js";
 
 const mutating: Operation = {
-  name: "nuc_reboot",
+  name: "sys_reboot",
   risk: "mutating",
   command: ["sudo", "reboot"],
 };
@@ -34,7 +34,7 @@ describe("guard", () => {
   });
 
   it("names the offending operation and its risk in the forbidden error", () => {
-    expect(() => guard(mutating, "read-only")).toThrow(/nuc_reboot.*mutating/);
+    expect(() => guard(mutating, "read-only")).toThrow(/sys_reboot.*mutating/);
   });
 
   it("gates a mutating operation behind approval at the approval level", () => {
@@ -51,7 +51,7 @@ defaults:
     read-only: allow
     mutating: require-approval
 overrides:
-  nuc_reboot:
+  sys_reboot:
     approval: deny
 `);
     // The default would gate it; the override denies it instead.
