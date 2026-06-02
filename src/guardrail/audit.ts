@@ -56,6 +56,11 @@ function serialize(entry: AuditEntry): Record<string, unknown> {
     event: entry.event,
     op: entry.op.name,
     risk: entry.op.risk,
+    // Record reversibility on mutating events so the metrics summarizer can weigh
+    // blast radius without re-reading the registry (#18). A mutating op is
+    // reversible unless it declared `irreversible`; read-only ops change nothing
+    // and carry no reversibility field.
+    ...(entry.op.risk === "mutating" ? { reversible: entry.op.irreversible !== true } : {}),
     ...(entry.proposalId !== undefined ? { proposalId: entry.proposalId } : {}),
     ...(entry.result !== undefined ? { exitCode: entry.result.exitCode, ms: entry.result.ms } : {}),
   };

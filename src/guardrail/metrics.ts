@@ -12,9 +12,23 @@ import type { RiskClass } from "../types.js";
  * Counts, not id-pairing: resolution is derived from event counts (proposed minus
  * approved minus rejected = pending), so it does not rely on proposal ids being a
  * stable global key — which they are not (the short `p1`-style handle resets when
- * the proposal store is cleared, while the audit log lives on). Reversibility is
- * not yet recorded (#18), so the report names that gap rather than hiding it.
+ * the proposal store is cleared, while the audit log lives on).
+ *
+ * Reversibility now flows through the audit stream (#18): a mutating event records
+ * whether the op declared an inverse. The blast radius reflects it — an
+ * irreversible execution is a permanent state change and so weighs more than a
+ * reversible one, which can be rolled back via its inverse. Older logs without the
+ * field count as reversibility-unknown and contribute to the conservative weight
+ * (treated like irreversible) rather than being silently dropped.
  */
+
+/**
+ * How heavily an irreversible mutating execution weighs in the blast radius
+ * relative to a reversible one (which is 1). A permanent, un-undoable change is a
+ * bigger blast radius than one a human can roll back via its declared inverse —
+ * the issue's A4 link. The weight is a deliberate, single knob: change it here.
+ */
+export const IRREVERSIBLE_WEIGHT = 3;
 
 /** One serialized audit line, as written by `audit.ts`'s `serialize()`. */
 export interface LoggedEvent {
@@ -22,6 +36,12 @@ export interface LoggedEvent {
   readonly event: "proposed" | "executed" | "rejected";
   readonly op: string;
   readonly risk: RiskClass;
+  /**
+   * Whether the mutating op declared an inverse (reversible) or `irreversible`.
+   * Present only on mutating events written by a current ward; absent on read-only
+   * events and on older logs predating #18 (treated as reversibility-unknown).
+   */
+  readonly reversible?: boolean;
   readonly proposalId?: string;
   readonly exitCode?: number;
   readonly ms?: number;
@@ -82,8 +102,24 @@ export interface Metrics {
   readonly blastRadius: {
     readonly mutatingExecutions: number;
     readonly byOp: Record<string, number>;
-    /** Reversibility is not yet recorded in the audit stream — depends on #18. */
-    readonly reversibility: "unknown";
+    /**
+     * Reversibility breakdown of the realised mutating executions (#18):
+     * - `reversible`: ran an op with a declared inverse — can be rolled back.
+     * - `irreversible`: ran an op marked `irreversible` — a permanent change.
+     * - `unknown`: from an older log line without the field — counted, never dropped.
+     * The three always sum to `mutatingExecutions`.
+     */
+    readonly reversibility: {
+      readonly reversible: number;
+      readonly irreversible: number;
+      readonly unknown: number;
+    };
+    /**
+     * Reversibility-weighted blast radius: each reversible execution counts 1,
+     * each irreversible (or unknown) execution counts {@link IRREVERSIBLE_WEIGHT},
+     * so a permanent change registers as a larger blast than an undoable one.
+     */
+    readonly weighted: number;
   };
   readonly perOp: OpStat[];
 }
@@ -179,8 +215,25 @@ export function summarize({ events, skipped }: ParseResult): Metrics {
   }
 
   const blastByOp: Record<string, number> = {};
+  // Fold reversibility into the blast radius (#18): a reversible execution can be
+  // rolled back via its inverse and weighs 1; an irreversible — or an older,
+  // field-less "unknown" — execution is a permanent change and weighs more.
+  let reversible = 0;
+  let irreversible = 0;
+  let unknown = 0;
+  let weighted = 0;
   for (const e of executedMutating) {
     blastByOp[e.op] = (blastByOp[e.op] ?? 0) + 1;
+    if (e.reversible === true) {
+      reversible += 1;
+      weighted += 1;
+    } else if (e.reversible === false) {
+      irreversible += 1;
+      weighted += IRREVERSIBLE_WEIGHT;
+    } else {
+      unknown += 1;
+      weighted += IRREVERSIBLE_WEIGHT;
+    }
   }
 
   const timestamps = events.map((e) => e.ts).sort();
@@ -213,7 +266,8 @@ export function summarize({ events, skipped }: ParseResult): Metrics {
     blastRadius: {
       mutatingExecutions: executedMutating.length,
       byOp: blastByOp,
-      reversibility: "unknown",
+      reversibility: { reversible, irreversible, unknown },
+      weighted,
     },
     perOp: [...byOp.values()].sort((a, b) => a.op.localeCompare(b.op)),
   };
@@ -280,7 +334,14 @@ export function formatMetrics(m: Metrics): string {
   )) {
     lines.push(`    ${padEnd(op, 18)} ${n}`);
   }
-  lines.push(`  reversibility: ${m.blastRadius.reversibility} (pending #18)`);
+  const r = m.blastRadius.reversibility;
+  lines.push(
+    `  reversibility: ${r.reversible} reversible, ${r.irreversible} irreversible` +
+      (r.unknown > 0 ? `, ${r.unknown} unknown` : ""),
+  );
+  lines.push(
+    `  weighted blast radius  ${m.blastRadius.weighted}  (irreversible ×${IRREVERSIBLE_WEIGHT})`,
+  );
 
   if (m.perOp.length > 0) {
     lines.push("");

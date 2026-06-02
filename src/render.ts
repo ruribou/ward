@@ -23,13 +23,15 @@ export function formatResult(op: Operation, result: ExecResult): string {
 /**
  * Build the "plan" block shown with a proposal so a human can approve an
  * *informed* write, not just a command string (CONCEPT Phase 2 dry-run/plan).
- * It combines two optional, separately-sourced parts:
- * - a human-readable effect description from i18n (`ops.<name>.plan`), and
+ * It combines three optional, separately-sourced parts:
+ * - a human-readable effect description from i18n (`ops.<name>.plan`),
+ * - a reversibility line stating whether the change can be undone and, if so, via
+ *   which inverse op — from the op's declared `inverse` / `irreversible` (#18), and
  * - a read-only precheck the approver can run to verify current state first
  *   (`op.precheck` — shown as a suggested command; ward does not run it).
  *
- * Returns "" when an op declares neither, so the notice is unchanged for ops
- * without a plan. The leading/trailing newlines space the block off from the
+ * Returns "" when an op declares none of these, so the notice is unchanged for
+ * ops without a plan. The leading/trailing newlines space the block off from the
  * command and approval lines around the `{plan}` slot in proposal.notice.
  */
 export function buildPlan(op: Operation, lang: Locale): string {
@@ -38,9 +40,32 @@ export function buildPlan(op: Operation, lang: Locale): string {
   if (description !== "") {
     lines.push(getLabel("proposal.plan", lang, { description }));
   }
+  lines.push(...reversibilityLines(op, lang));
   const precheck = op.precheck;
   if (precheck !== undefined && precheck.length > 0) {
     lines.push(getLabel("proposal.precheck", lang, { precheck: precheck.join(" ") }));
   }
   return lines.length === 0 ? "" : `\n${lines.join("\n")}\n`;
+}
+
+/**
+ * The reversibility line(s) for a mutating op's plan: state plainly whether the
+ * change can be rolled back — and via which inverse op — so the operator decides
+ * with that in hand. A reversible op names its inverse; an irreversible one says
+ * so explicitly. Read-only ops change nothing and so contribute no line; a
+ * mutating op always carries exactly one (the loader guarantees it declared one).
+ */
+function reversibilityLines(op: Operation, lang: Locale): string[] {
+  if (op.risk !== "mutating") {
+    return [];
+  }
+  if (op.inverse !== undefined) {
+    return [getLabel("gate.reversible", lang, { inverse: op.inverse })];
+  }
+  if (op.irreversible === true) {
+    return [getLabel("gate.irreversible", lang)];
+  }
+  // A mutating op with neither cannot come from the loader (it fails closed), but
+  // a hand-built op in a test might omit both — say nothing rather than guess.
+  return [];
 }

@@ -282,6 +282,80 @@ describe("ward MCP server — parameterized op with an enum allowlist (in-memory
   });
 });
 
+describe("ward MCP server — reversibility surfaced in the proposal (#18)", () => {
+  // A pinned registry that declares both stances: a reversible op naming its
+  // inverse and an irreversible one. Mutual inverse keeps the (hand-built) ops
+  // self-consistent, though these objects bypass the loader.
+  const reversibilityRegistry: readonly Operation[] = [
+    {
+      name: "sys_pull_image",
+      risk: "mutating",
+      command: ["docker", "pull", "alpine"],
+      inverse: "sys_remove_image",
+    },
+    {
+      name: "sys_remove_image",
+      risk: "mutating",
+      command: ["docker", "rmi", "alpine"],
+      inverse: "sys_pull_image",
+    },
+    { name: "sys_reboot", risk: "mutating", command: ["sudo", "reboot"], irreversible: true },
+  ];
+
+  it("states a reversible op can be undone, and names its inverse", async () => {
+    const client = await connect({
+      autonomy: "approval",
+      operations: reversibilityRegistry,
+      runOperation: async () => fakeResult(),
+      audit: () => {},
+    });
+    const text = textOf(await client.callTool({ name: "sys_pull_image", arguments: {} }));
+    expect(text).toContain("Reversible: undo this change with sys_remove_image.");
+  });
+
+  it("states an irreversible op cannot be undone", async () => {
+    const client = await connect({
+      autonomy: "approval",
+      operations: reversibilityRegistry,
+      runOperation: async () => fakeResult(),
+      audit: () => {},
+    });
+    const text = textOf(await client.callTool({ name: "sys_reboot", arguments: {} }));
+    expect(text).toContain("Irreversible: this change cannot be undone");
+  });
+
+  it("surfaces reversibility for the real registry's sys_pull_image, in ja", async () => {
+    const client = await connect({
+      autonomy: "approval",
+      lang: "ja",
+      runOperation: async () => fakeResult(),
+      audit: () => {},
+    });
+    const text = textOf(
+      await client.callTool({ name: "sys_pull_image", arguments: { image: "hello-world" } }),
+    );
+    expect(text).toContain("巻き戻し可能: この変更は sys_remove_image で取り消せる。");
+  });
+
+  it("records reversibility on the proposed audit event for the metrics stream", async () => {
+    const audit = vi.fn();
+    const client = await connect({
+      autonomy: "approval",
+      operations: reversibilityRegistry,
+      runOperation: async () => fakeResult(),
+      audit,
+    });
+    await client.callTool({ name: "sys_pull_image", arguments: {} });
+    await client.callTool({ name: "sys_reboot", arguments: {} });
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ op: expect.objectContaining({ inverse: "sys_remove_image" }) }),
+    );
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ op: expect.objectContaining({ irreversible: true }) }),
+    );
+  });
+});
+
 describe("ward MCP server — plan preview before approval (in-memory)", () => {
   it("shows the effect description and precheck in a real mutating op's proposal", async () => {
     const runOperation = vi.fn(async () => fakeResult());
@@ -294,6 +368,7 @@ describe("ward MCP server — plan preview before approval (in-memory)", () => {
     const text = textOf(res);
     expect(text).toContain("Plan:");
     expect(text).toContain("chosen image"); // from the en plan description
+    expect(text).toContain("Reversible: undo this change with sys_remove_image.");
     expect(text).toContain("Verify first (read-only): $ docker images hello-world");
     // The plan never runs the precheck — propose stays pure (nothing touches the host).
     expect(runOperation).not.toHaveBeenCalled();

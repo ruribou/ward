@@ -71,6 +71,25 @@ describe("operations registry", () => {
       expect(op.precheck?.length ?? 0).toBeGreaterThan(0);
     }
   });
+
+  it("declares a reversibility stance on every mutating op, and none on read-only ops", () => {
+    for (const op of operations) {
+      if (op.risk === "mutating") {
+        const declared = (op.inverse !== undefined ? 1 : 0) + (op.irreversible === true ? 1 : 0);
+        expect(declared).toBe(1); // exactly one of inverse / irreversible
+      } else {
+        expect(op.inverse).toBeUndefined();
+        expect(op.irreversible).toBeUndefined();
+      }
+    }
+  });
+
+  it("makes sys_pull_image and sys_remove_image mutual inverses (the first inverse pair)", () => {
+    const pull = operations.find((o) => o.name === "sys_pull_image");
+    const remove = operations.find((o) => o.name === "sys_remove_image");
+    expect(pull?.inverse).toBe("sys_remove_image");
+    expect(remove?.inverse).toBe("sys_pull_image");
+  });
 });
 
 describe("parseOperations (the loader guardrail)", () => {
@@ -135,6 +154,7 @@ operations:
 operations:
   - name: sys_pull_image
     risk: mutating
+    irreversible: true
     command: [docker, pull, hello-world]
     precheck: [docker, images, hello-world]
 `;
@@ -150,6 +170,7 @@ operations:
 operations:
   - name: sys_pull_image
     risk: mutating
+    irreversible: true
     command: [docker, pull, hello-world]
     precheck: [sh, -c, "rm -rf /"]
 `;
@@ -161,6 +182,7 @@ operations:
 operations:
   - name: sys_pull_image
     risk: mutating
+    irreversible: true
     command: [docker, pull, hello-world]
     precheck: []
 `;
@@ -173,6 +195,7 @@ describe("parseOperations — parameterized operations (enum allowlist)", () => 
 operations:
   - name: sys_pull_image
     risk: mutating
+    irreversible: true
     command: [docker, pull, "{image}"]
 ${body}
 `;
@@ -190,6 +213,7 @@ ${body}
 operations:
   - name: sys_remove_image
     risk: mutating
+    irreversible: true
     command: [docker, rmi, "{image}"]
     precheck: [docker, images, "{image}"]
     params:
@@ -222,6 +246,7 @@ operations:
 operations:
   - name: sys_pull_image
     risk: mutating
+    irreversible: true
     command: [docker, pull, hello-world]
     params:
       - name: image
@@ -235,6 +260,7 @@ operations:
 operations:
   - name: sys_pull_image
     risk: mutating
+    irreversible: true
     command: [docker, pull, "{image}"]
     params:
       - name: image
@@ -252,11 +278,140 @@ operations:
   });
 });
 
+describe("parseOperations — reversibility (inverse / irreversible) validation", () => {
+  const pair = `
+operations:
+  - name: sys_pull_image
+    risk: mutating
+    inverse: sys_remove_image
+    command: [docker, pull, alpine]
+  - name: sys_remove_image
+    risk: mutating
+    inverse: sys_pull_image
+    command: [docker, rmi, alpine]
+`;
+
+  it("accepts a mutually-inverse mutating pair and keeps each inverse", () => {
+    const ops = parseOperations(pair);
+    expect(ops.find((o) => o.name === "sys_pull_image")?.inverse).toBe("sys_remove_image");
+    expect(ops.find((o) => o.name === "sys_remove_image")?.inverse).toBe("sys_pull_image");
+  });
+
+  it("accepts a mutating op marked irreversible", () => {
+    const ops = parseOperations(`
+operations:
+  - name: sys_reboot
+    risk: mutating
+    irreversible: true
+    command: [sudo, reboot]
+`);
+    expect(ops[0]?.irreversible).toBe(true);
+    expect(ops[0]?.inverse).toBeUndefined();
+  });
+
+  it("rejects a mutating op that declares NEITHER inverse nor irreversible", () => {
+    const yaml = `
+operations:
+  - name: sys_reboot
+    risk: mutating
+    command: [sudo, reboot]
+`;
+    expect(() => parseOperations(yaml)).toThrow(
+      /must declare exactly one of inverse \/ irreversible \(declares neither\)/,
+    );
+  });
+
+  it("rejects a mutating op that declares BOTH inverse and irreversible", () => {
+    const yaml = `
+operations:
+  - name: sys_pull_image
+    risk: mutating
+    irreversible: true
+    inverse: sys_remove_image
+    command: [docker, pull, alpine]
+  - name: sys_remove_image
+    risk: mutating
+    inverse: sys_pull_image
+    command: [docker, rmi, alpine]
+`;
+    expect(() => parseOperations(yaml)).toThrow(/declares both/);
+  });
+
+  it("rejects an inverse that names no operation in the registry (dangling)", () => {
+    const yaml = `
+operations:
+  - name: sys_pull_image
+    risk: mutating
+    inverse: sys_does_not_exist
+    command: [docker, pull, alpine]
+`;
+    expect(() => parseOperations(yaml)).toThrow(/names no operation in the registry/);
+  });
+
+  it("rejects an inverse that points at a read-only operation", () => {
+    const yaml = `
+operations:
+  - name: sys_pull_image
+    risk: mutating
+    inverse: sys_images
+    command: [docker, pull, alpine]
+  - name: sys_images
+    risk: read-only
+    command: [docker, images]
+`;
+    expect(() => parseOperations(yaml)).toThrow(
+      /is read-only — an inverse must itself be mutating/,
+    );
+  });
+
+  it("rejects a read-only op that declares an inverse", () => {
+    const yaml = `
+operations:
+  - name: sys_images
+    risk: read-only
+    inverse: sys_remove_image
+    command: [docker, images]
+  - name: sys_remove_image
+    risk: mutating
+    irreversible: true
+    command: [docker, rmi, alpine]
+`;
+    expect(() => parseOperations(yaml)).toThrow(
+      /read-only and must declare neither inverse nor irreversible/,
+    );
+  });
+
+  it("rejects a read-only op that declares irreversible", () => {
+    const yaml = `
+operations:
+  - name: sys_disk
+    risk: read-only
+    irreversible: true
+    command: [df, -h]
+`;
+    expect(() => parseOperations(yaml)).toThrow(
+      /read-only and must declare neither inverse nor irreversible/,
+    );
+  });
+
+  it("rejects an irreversible value that is not the literal true", () => {
+    const yaml = `
+operations:
+  - name: sys_reboot
+    risk: mutating
+    irreversible: yes-please
+    command: [sudo, reboot]
+`;
+    expect(() => parseOperations(yaml)).toThrow(/irreversible, if set, must be the literal true/);
+  });
+});
+
 describe("resolveOperation — enforces the enum and substitutes (no placeholder survives)", () => {
   const op = parseOperations(`
 operations:
   - name: sys_pull_image
     risk: mutating
+    irreversible: true
     command: [docker, pull, "{image}"]
     precheck: [docker, images, "{image}"]
     params:
@@ -269,6 +424,29 @@ operations:
     expect(resolved.command).toEqual(["docker", "pull", "alpine"]);
     expect(resolved.precheck).toEqual(["docker", "images", "alpine"]);
     expect(resolved.params).toBeUndefined(); // a resolved op carries no params
+  });
+
+  it("preserves reversibility on the resolved op so a proposal can surface it", () => {
+    const reversible = parseOperations(`
+operations:
+  - name: sys_pull_image
+    risk: mutating
+    inverse: sys_remove_image
+    command: [docker, pull, "{image}"]
+    params:
+      - name: image
+        allow: [alpine]
+  - name: sys_remove_image
+    risk: mutating
+    inverse: sys_pull_image
+    command: [docker, rmi, "{image}"]
+    params:
+      - name: image
+        allow: [alpine]
+`)[0]!;
+    const resolved = resolveOperation(reversible, { image: "alpine" });
+    expect(resolved.inverse).toBe("sys_remove_image");
+    expect(resolved.irreversible).toBeUndefined();
   });
 
   it("rejects a value outside the enum allowlist", () => {

@@ -10,8 +10,32 @@ const RO = (op: string, exitCode: number, ts: string) =>
   line({ ts, event: "executed", op, risk: "read-only", exitCode, ms: 5 });
 const PROPOSE = (op: string, proposalId: string, ts: string) =>
   line({ ts, event: "proposed", op, risk: "mutating", proposalId });
+// Mutating executions carry a reversibility flag (#18). The legacy EXEC omits it
+// (an older log line → reversibility-unknown); EXEC_REV / EXEC_IRREV set it.
 const EXEC = (op: string, proposalId: string, exitCode: number, ts: string) =>
   line({ ts, event: "executed", op, risk: "mutating", proposalId, exitCode, ms: 10 });
+const EXEC_REV = (op: string, proposalId: string, exitCode: number, ts: string) =>
+  line({
+    ts,
+    event: "executed",
+    op,
+    risk: "mutating",
+    reversible: true,
+    proposalId,
+    exitCode,
+    ms: 10,
+  });
+const EXEC_IRREV = (op: string, proposalId: string, exitCode: number, ts: string) =>
+  line({
+    ts,
+    event: "executed",
+    op,
+    risk: "mutating",
+    reversible: false,
+    proposalId,
+    exitCode,
+    ms: 10,
+  });
 const REJECT = (op: string, proposalId: string, ts: string) =>
   line({ ts, event: "rejected", op, risk: "mutating", proposalId });
 
@@ -96,7 +120,35 @@ describe("summarize", () => {
   it("blast radius counts realised mutating executions by op", () => {
     expect(m.blastRadius.mutatingExecutions).toBe(3);
     expect(m.blastRadius.byOp).toEqual({ sys_pull_image: 2, sys_remove_image: 1 });
-    expect(m.blastRadius.reversibility).toBe("unknown");
+    // The base log predates #18 (no reversible field) → all three count as unknown.
+    expect(m.blastRadius.reversibility).toEqual({ reversible: 0, irreversible: 0, unknown: 3 });
+  });
+
+  it("weighs irreversible executions heavier than reversible ones in blast radius", () => {
+    const wlog = [
+      PROPOSE("sys_pull_image", "p1", "2026-06-01T10:00:00Z"),
+      EXEC_REV("sys_pull_image", "p1", 0, "2026-06-01T10:01:00Z"), // reversible → 1
+      PROPOSE("sys_pull_image", "p2", "2026-06-01T10:02:00Z"),
+      EXEC_REV("sys_pull_image", "p2", 0, "2026-06-01T10:03:00Z"), // reversible → 1
+      PROPOSE("sys_reboot", "p3", "2026-06-01T10:04:00Z"),
+      EXEC_IRREV("sys_reboot", "p3", 0, "2026-06-01T10:05:00Z"), // irreversible → 3
+    ].join("\n");
+    const mw = summarize(parseAuditLog(wlog));
+    expect(mw.blastRadius.mutatingExecutions).toBe(3);
+    expect(mw.blastRadius.reversibility).toEqual({ reversible: 2, irreversible: 1, unknown: 0 });
+    // 2 reversible (×1) + 1 irreversible (×3) = 5, strictly larger than the raw count 3.
+    expect(mw.blastRadius.weighted).toBe(5);
+    expect(mw.blastRadius.weighted).toBeGreaterThan(mw.blastRadius.mutatingExecutions);
+  });
+
+  it("treats a single irreversible execution as a larger blast than a single reversible one", () => {
+    const rev = summarize(
+      parseAuditLog(EXEC_REV("sys_pull_image", "p1", 0, "2026-06-01T10:00:00Z")),
+    );
+    const irrev = summarize(
+      parseAuditLog(EXEC_IRREV("sys_reboot", "p1", 0, "2026-06-01T10:00:00Z")),
+    );
+    expect(irrev.blastRadius.weighted).toBeGreaterThan(rev.blastRadius.weighted);
   });
 
   it("per-op breakdown counts proposed/executed/ok/failed, sorted by name", () => {
@@ -151,8 +203,20 @@ describe("formatMetrics", () => {
     expect(report).toContain("rejected");
     expect(report).toContain("pending");
     expect(report).toContain("Blast radius");
-    expect(report).toContain("reversibility: unknown (pending #18)");
+    expect(report).toContain("reversibility: 0 reversible, 0 irreversible, 3 unknown");
+    expect(report).toContain("weighted blast radius");
     expect(report).toContain("57.1%"); // intervention rate 4/7
+  });
+
+  it("renders the reversibility breakdown and weighted blast radius for a #18 log", () => {
+    const wlog = [
+      EXEC_REV("sys_pull_image", "p1", 0, "2026-06-01T10:00:00Z"),
+      EXEC_IRREV("sys_reboot", "p2", 0, "2026-06-01T10:01:00Z"),
+    ].join("\n");
+    const report = formatMetrics(summarize(parseAuditLog(wlog)));
+    expect(report).toContain("reversibility: 1 reversible, 1 irreversible");
+    expect(report).not.toContain("unknown"); // no legacy lines → no unknown segment
+    expect(report).toContain("weighted blast radius  4"); // 1×1 + 1×3
   });
 
   it("says 'no events' for an empty log", () => {
