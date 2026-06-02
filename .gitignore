@@ -12,7 +12,13 @@ CLAUDE.local.md
 # secrets / local — never commit (infra repo + public: be strict)
 .env
 *.env
+.env.*
+!.env.example
+!.env.sample
 secrets/
+secrets.yaml
+secrets.yml
+secrets.json
 *.key
 *.pem
 *.crt
@@ -20,15 +26,30 @@ id_*
 kubeconfig
 *.kubeconfig
 
-# IaC state / secrets (tools TBD — add patterns as we pick them)
+# infra inventory / host data — real addresses live here; keep out of this public repo
+inventory
+inventory.ini
+inventory.yaml
+inventory.yml
+inventory/
+hosts.ini
+host_vars/
+group_vars/
+
+# IaC state / Ansible vault (tools TBD — add patterns as we pick them)
 *.tfstate
 *.tfstate.*
 .vault_pass
 vault_pass*
+*.retry
+*.vault
+vault.yml
+
+# logs — audit logs can carry real host network output (sys_network / sys_listening_ports)
+*.log
 
 # node / typescript
 node_modules/
 dist/
 coverage/
 *.tsbuildinfo
-npm-debug.log*
