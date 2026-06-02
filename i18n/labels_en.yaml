@@ -34,6 +34,14 @@ ops:
   sys_container_logs:
     title: Container logs
     description: Returns the last 200 log lines of a Docker container (docker logs --tail 200), chosen from a fixed allowlist (container — one of web, nginx). Read-only — for checking what a service is doing or why it failed.
+  sys_run_container:
+    title: Run container
+    description: Starts a Docker container in the background with its exposed ports published to random host ports (docker run -d --name <name> -P <image>), chosen from fixed allowlists (name — web; image — nginx). A write operation that changes the host's running state — it requires approval. Find the assigned host port with sys_containers.
+    plan: Creates and starts a container from the chosen image, publishing its exposed ports to random host ports. Reversible with sys_remove_container.
+  sys_remove_container:
+    title: Remove container
+    description: Force-removes a Docker container (docker rm -f), chosen from a fixed allowlist (name — web). The inverse of sys_run_container — a rollback. A write operation — it requires approval.
+    plan: Stops and removes the chosen container. If it does not exist this is a no-op. Reversible with sys_run_container.
 proposal:
   notice: |-
     Proposal {id} — this operation changes the host (risk: {risk}). It will not run until a human approves it.

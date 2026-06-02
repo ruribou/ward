@@ -55,3 +55,23 @@ operations:
     params:
       - name: container
         allow: [web, nginx]
+
+  - name: sys_run_container
+    risk: mutating
+    inverse: sys_remove_container
+    command: [docker, run, -d, --name, "{name}", -P, "{image}"]
+    precheck: [docker, images, "{image}"]
+    params:
+      - name: name
+        allow: [web]
+      - name: image
+        allow: [nginx]
+
+  - name: sys_remove_container
+    risk: mutating
+    inverse: sys_run_container
+    command: [docker, rm, -f, "{name}"]
+    precheck: [docker, ps, -a]
+    params:
+      - name: name
+        allow: [web]

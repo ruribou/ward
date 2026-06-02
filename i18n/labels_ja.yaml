@@ -34,6 +34,14 @@ ops:
   sys_container_logs:
     title: コンテナログ
     description: Docker コンテナの直近 200 行のログ（docker logs --tail 200）を返す。許可リストから選ぶ（container — web / nginx のいずれか）。read-only——サービスの動作確認や失敗原因の調査に。
+  sys_run_container:
+    title: コンテナ起動
+    description: Docker コンテナをバックグラウンドで起動し、公開ポートをホストのランダムなポートに割り当てる（docker run -d --name <name> -P <image>）。許可リストから選ぶ（name — web；image — nginx）。ホストの稼働状態を変える書き込み操作——承認が要る。割り当てポートは sys_containers で確認できる。
+    plan: 選んだイメージからコンテナを作成・起動し、公開ポートをホストのランダムなポートに割り当てる。sys_remove_container で巻き戻せる。
+  sys_remove_container:
+    title: コンテナ削除
+    description: Docker コンテナを強制削除する（docker rm -f）。許可リストから選ぶ（name — web）。sys_run_container の逆＝巻き戻し操作。書き込み操作——承認が要る。
+    plan: 選んだコンテナを停止・削除する。無ければ何も起きない（no-op）。sys_run_container で巻き戻せる。
 proposal:
   notice: |-
     提案 {id} — この操作はホストを変更します（risk: {risk}）。人間が承認するまで実行されません。
