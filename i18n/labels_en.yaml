@@ -69,12 +69,21 @@ cli:
   discarded: 'ward: discarded proposal "{id}".'
   metricsNoSource: "ward metrics: give a log path, set WARD_AUDIT_LOG, or pipe a log on stdin."
   metricsReadFailed: 'ward metrics: cannot read "{source}" — {error}'
+  wait:
+    usage: |-
+      ward wait <id> [--timeout=<sec>] [--interval=<ms>] — block until a human consumes proposal <id>.
+      Read-only: it only OBSERVES the pending store; it never approves. A human still runs ward approve.
+      Defaults: --timeout=600 (seconds), --interval=1000 (ms). Exits 0 when consumed, 124 on timeout.
+    consumed: 'ward: proposal "{id}" left the pending store — a human approved or rejected it. Approval stays human; ward wait only watched. Now verify the host actually changed with read-only operations: a FAILED approval also consumes the proposal, so do not assume success.'
+    timeout: 'ward: timed out after {timeout}s — proposal "{id}" is still pending (no change made). Run ward wait again, or check ward list.'
+    invalidId: 'ward: "{id}" is not a valid proposal id (expected p<number>, e.g. p1).'
   usage: |-
     ward — human approval for pending infrastructure changes proposed by the AI.
     Usage:
       ward list             show pending proposals (and their plan)
       ward approve <id>     approve and run a pending proposal
       ward reject <id>      discard a pending proposal without running it
+      ward wait <id>        block until a human approves/rejects <id> (read-only; exit 124 on timeout)
       ward metrics [path]   summarize the audit log (success / intervention / blast radius)
       ward config ...       view or set user preferences (language, ssh_host)
   config:

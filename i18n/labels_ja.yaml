@@ -69,12 +69,21 @@ cli:
   discarded: 'ward: 提案 "{id}" を破棄しました。'
   metricsNoSource: "ward metrics: ログのパスを渡すか、WARD_AUDIT_LOG を設定するか、stdin にログを流してください。"
   metricsReadFailed: 'ward metrics: "{source}" を読めません — {error}'
+  wait:
+    usage: |-
+      ward wait <id> [--timeout=<秒>] [--interval=<ミリ秒>] — 提案 <id> が人間に処理されるまでブロックする。
+      read-only: 保留ストアを観察するだけで、承認はしません。承認は人間が ward approve で行います。
+      既定: --timeout=600（秒）、--interval=1000（ミリ秒）。処理されたら 0、タイムアウトで 124 を返します。
+    consumed: 'ward: 提案 "{id}" は保留ストアから消えました——人間が承認または却下しました。承認はあくまで人間が行い、ward wait は観察しただけです。承認が失敗しても提案は消費されるため、read-only 操作でホストが実際に変わったかを必ず確認してください（成功と決めつけない）。'
+    timeout: 'ward: {timeout}秒でタイムアウトしました——提案 "{id}" はまだ保留中です（変更は行われていません）。ward wait を再実行するか、ward list を確認してください。'
+    invalidId: 'ward: "{id}" は有効な提案 id ではありません（p<数字>、例: p1 を想定）。'
   usage: |-
     ward — AI が提案したインフラ変更を、人間が承認するためのコマンド。
     使い方:
       ward list             保留中の提案（と plan）を表示
       ward approve <id>     保留中の提案を承認して実行
       ward reject <id>      提案を実行せずに破棄
+      ward wait <id>        人間が <id> を承認／却下するまでブロック（read-only；タイムアウトで 124）
       ward metrics [path]   監査ログを集計（成功率 / 介入率 / blast radius）
       ward config ...       ユーザ設定（language, ssh_host）の表示・変更
   config:
