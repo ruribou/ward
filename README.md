@@ -51,7 +51,7 @@ guarantees come from structure, not trust:
   MCP surface has _no approve tool_, so it cannot approve its own proposal — approval
   happens in a process the agent does not drive. (This holds as long as the agent isn't
   also handed direct credentials to the substrate; making ward the only door is a further
-  layer.)
+  layer — see [docs/DEPLOYMENT-SECURITY.md](./docs/DEPLOYMENT-SECURITY.md).)
 - **A plan with every proposal.** A proposal shows more than the command: a plain-language
   description of what will change, and a read-only command you can run first to check the
   current state — so approval is _informed_, not a rubber stamp. Building the plan never
