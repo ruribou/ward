@@ -143,6 +143,32 @@ label must exist in both `labels_en.yaml` and `labels_ja.yaml`.** A read-only op
 `title` + `description` in both; a mutating op also needs `plan` in both. The test suite
 enforces this parity — a label present in only one locale fails CI (see _Verify locally_).
 
+## Auto-continue after approval (`ward wait`)
+
+Approval is **out of band**: a human runs `ward approve <id>` in their own terminal, so
+the completion never returns to the agent's loop. `ward wait <id>` lets an agent **block
+on that human step** without ever automating it.
+
+The intended agent loop:
+
+1. The agent proposes a mutating op and gets back a proposal id `pN`.
+2. The agent runs `ward wait pN` as a **background** process and blocks on it.
+3. A human, in their own terminal, runs `ward approve pN` (or `ward reject pN`). That
+   consumes the proposal — `ward wait` is what notices, by polling the pending store
+   read-only.
+4. When the proposal leaves the store, the `ward wait` process exits `0`. The agent then
+   **verifies the result with read-only operations** before proposing the next step. A
+   _failed_ approval also consumes the proposal, so a `0` exit means "a human acted", not
+   "the change succeeded" — the agent must confirm the host actually changed.
+
+`ward wait` is **read-only**: it only ever calls `.get`/`.list` on the proposal store to
+observe that an id left the pending set. It never approves, never runs the operation, and
+never writes the store. **Approval stays human** — the next mutating op still needs a human
+`ward approve`. On timeout (default 600s) `ward wait` exits `124` and nothing has changed.
+
+> Phase 2 (audit-log `exitCode` precision, so `ward wait` could distinguish a succeeded
+> from a failed approval) depends on #50 and is not part of this change.
+
 ## Verify locally
 
 Run all four before opening a PR:

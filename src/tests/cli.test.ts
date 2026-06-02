@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isEntrypoint, runCli } from "../cli.js";
+import { isEntrypoint, runCli, waitForConsumption } from "../cli.js";
 import { ProposalStore } from "../guardrail/proposals.js";
 import { createServer } from "../server.js";
 import type { ExecResult, Operation } from "../types.js";
@@ -156,6 +156,124 @@ describe("ward CLI — the human's out-of-band approval surface", () => {
     const code = await runCli(["frobnicate"], { proposals: new ProposalStore(path), out: cap.out });
     expect(code).toBe(2);
     expect(cap.text()).toContain("Usage");
+  });
+});
+
+describe("ward wait — block until a human consumes the proposal (read-only)", () => {
+  it("returns 0 once the proposal leaves the pending store, telling the agent to verify", async () => {
+    const proposals = new ProposalStore(path);
+    const { id } = proposals.create(op);
+    let ticks = 0;
+    // The human consumes it (out of band) on the 3rd poll; wait never approves.
+    const sleep = vi.fn(async () => {
+      ticks += 1;
+      if (ticks === 3) {
+        new ProposalStore(path).consume(id);
+      }
+    });
+    const cap = capture();
+    const code = await runCli(["wait", id, "--interval=5"], {
+      proposals,
+      sleep,
+      now: () => 0,
+      out: cap.out,
+    });
+    expect(code).toBe(0);
+    expect(cap.text()).toContain("verify");
+    expect(sleep).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns 124 on timeout while the proposal is still pending", async () => {
+    const proposals = new ProposalStore(path);
+    const { id } = proposals.create(op);
+    let clock = 0;
+    const sleep = vi.fn(async () => {
+      clock += 1000; // advance past the 1s timeout on the first sleep
+    });
+    const cap = capture();
+    const code = await runCli(["wait", id, "--timeout=1"], {
+      proposals,
+      sleep,
+      now: () => clock,
+      out: cap.out,
+    });
+    expect(code).toBe(124);
+    expect(cap.text()).toContain("still pending");
+    expect(cap.text()).toContain("1"); // the {timeout} seconds
+  });
+
+  it("rejects an invalid id with exit 2 and never polls", async () => {
+    const sleep = vi.fn(async () => {});
+    const cap = capture();
+    const code = await runCli(["wait", "not-an-id"], {
+      proposals: new ProposalStore(path),
+      sleep,
+      now: () => 0,
+      out: cap.out,
+    });
+    expect(code).toBe(2);
+    expect(cap.text()).toContain("not-an-id");
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("prints usage and exits 2 when no id is given", async () => {
+    const cap = capture();
+    const code = await runCli(["wait"], { proposals: new ProposalStore(path), out: cap.out });
+    expect(code).toBe(2);
+    expect(cap.text()).toContain("ward wait <id>");
+  });
+});
+
+describe("waitForConsumption — the pure poll (read-only, no real timers)", () => {
+  it("returns 'consumed' when get() becomes null after N fake sleeps", async () => {
+    const proposals = new ProposalStore(path);
+    const { id } = proposals.create(op);
+    let ticks = 0;
+    const sleep = vi.fn(async () => {
+      ticks += 1;
+      if (ticks === 2) {
+        new ProposalStore(path).consume(id);
+      }
+    });
+    const outcome = await waitForConsumption(proposals, id, {
+      intervalMs: 1,
+      timeoutMs: 1_000_000,
+      sleep,
+      now: () => 0,
+    });
+    expect(outcome).toBe("consumed");
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns 'timeout' when the injected clock passes timeoutMs while still pending", async () => {
+    const proposals = new ProposalStore(path);
+    proposals.create(op);
+    let clock = 0;
+    const sleep = vi.fn(async () => {
+      clock += 500;
+    });
+    const outcome = await waitForConsumption(proposals, "p1", {
+      intervalMs: 1,
+      timeoutMs: 1000,
+      sleep,
+      now: () => clock,
+    });
+    expect(outcome).toBe("timeout");
+    // start=0; tick→500 (<1000, sleeps again); tick→1000 (>=1000, times out).
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns 'consumed' immediately when the id is gone at the first check", async () => {
+    const proposals = new ProposalStore(path); // empty store: get() is null
+    const sleep = vi.fn(async () => {});
+    const outcome = await waitForConsumption(proposals, "p1", {
+      intervalMs: 1,
+      timeoutMs: 1000,
+      sleep,
+      now: () => 0,
+    });
+    expect(outcome).toBe("consumed");
+    expect(sleep).not.toHaveBeenCalled();
   });
 });
 

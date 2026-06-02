@@ -39,6 +39,42 @@ export interface CliDeps {
   readStdin: () => string;
   /** Path of the user config file (~/.ward/config.yaml); injected so tests use a temp file. */
   configFilePath: string;
+  /** Sleeps ms milliseconds; injected so `ward wait` polls with no real timers under test. */
+  sleep: (ms: number) => Promise<void>;
+  /** Epoch-millisecond clock; injected so `ward wait` timeouts advance instantly under test. */
+  now: () => number;
+}
+
+/** Injected clock + sleep for {@link waitForConsumption}, the only impure parts of the poll. */
+interface WaitDeps {
+  intervalMs: number;
+  timeoutMs: number;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+}
+
+/**
+ * Block until a proposal leaves the pending store — read-only OBSERVATION, never
+ * approval. This is the agent's "auto-continue after a human approves" primitive:
+ * it polls `.get(id)` (never `.consume`/`.create`) and returns once the human's
+ * out-of-band `ward approve`/`ward reject` has consumed the proposal. An id that
+ * is already gone at the first check counts as "consumed" — correct for the flow.
+ */
+export async function waitForConsumption(
+  proposals: ProposalStore,
+  id: string,
+  deps: WaitDeps,
+): Promise<"consumed" | "timeout"> {
+  const start = deps.now();
+  for (;;) {
+    if (proposals.get(id) === null) {
+      return "consumed";
+    }
+    if (deps.now() - start >= deps.timeoutMs) {
+      return "timeout";
+    }
+    await deps.sleep(deps.intervalMs);
+  }
 }
 
 /** Run one `ward` invocation. Returns the process exit code. */
@@ -51,6 +87,8 @@ export async function runCli(argv: string[], deps: Partial<CliDeps> = {}): Promi
   const readFile = deps.readFile ?? ((path: string) => readFileSync(path, "utf8"));
   const readStdin = deps.readStdin ?? (() => readFileSync(0, "utf8"));
   const configFilePath = deps.configFilePath ?? resolveConfigPath();
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const now = deps.now ?? (() => Date.now());
 
   const [command, id] = argv;
 
@@ -98,6 +136,32 @@ export async function runCli(argv: string[], deps: Partial<CliDeps> = {}): Promi
       audit({ event: "rejected", op: proposal.op, proposalId: proposal.id });
       out(getLabel("cli.discarded", lang, { id }));
       return 0;
+    }
+
+    case "wait": {
+      if (id === undefined) {
+        out(getLabel("cli.wait.usage", lang));
+        return 2;
+      }
+      if (!ProposalStore.ID_RE.test(id)) {
+        out(getLabel("cli.wait.invalidId", lang, { id }));
+        return 2;
+      }
+      const rest = argv.slice(2);
+      const timeoutSec = numericFlag(rest, "--timeout", 600);
+      const intervalMs = numericFlag(rest, "--interval", 1000);
+      const outcome = await waitForConsumption(proposals, id, {
+        intervalMs,
+        timeoutMs: timeoutSec * 1000,
+        sleep,
+        now,
+      });
+      if (outcome === "consumed") {
+        out(getLabel("cli.wait.consumed", lang, { id }));
+        return 0;
+      }
+      out(getLabel("cli.wait.timeout", lang, { id, timeout: String(timeoutSec) }));
+      return 124;
     }
 
     case "metrics": {
@@ -177,6 +241,16 @@ export async function runCli(argv: string[], deps: Partial<CliDeps> = {}): Promi
       out(getLabel("cli.usage", lang));
       return command === undefined ? 0 : 2;
   }
+}
+
+/** Parse a `--name=<n>` flag from argv; falls back to `fallback` if absent or non-numeric. */
+function numericFlag(args: string[], name: string, fallback: number): number {
+  const arg = args.find((a) => a.startsWith(`${name}=`));
+  if (arg === undefined) {
+    return fallback;
+  }
+  const n = Number(arg.slice(name.length + 1));
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
 /**
