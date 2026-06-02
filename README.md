@@ -73,6 +73,42 @@ change, not a rewrite:
 2. **`approval`** — may _propose_ changes; a human approves each one before it runs.
 3. **`autonomous`** — act within policy without per-action approval. **Not built yet.**
 
+## Configuration
+
+User preferences live in a config file (`~/.ward/config.yaml`), with an env var as a
+per-process override. Precedence is **env > file > built-in default**, so an env var
+always wins for a single run while the file is the persistent setting shared by both the
+MCP server and the `ward` CLI.
+
+Two keys are settable:
+
+- **`language`** — UI language (`en` default, or `ja`). Env override: `WARD_LANG`.
+- **`ssh_host`** — the SSH host **alias** (env override: `WARD_SSH_HOST`).
+
+```yaml
+# ~/.ward/config.yaml
+language: ja
+ssh_host: nuc
+```
+
+Set them from the CLI (which writes the file for you):
+
+```sh
+ward config set language ja
+ward config set ssh_host nuc
+ward config get           # show stored values and the file path
+ward config path          # print the resolved config file path
+```
+
+> **`ssh_host` is an alias only — never a real IP or hostname.** ward resolves it through
+> your `~/.ssh/config`, where the real address stays; the alias is all that is written to
+> `~/.ward/config.yaml`. ward enforces this: a value with spaces, colons, or slashes is
+> rejected.
+
+`autonomy` is deliberately **not** file-configurable — it is a guardrail attribute, set
+only via `WARD_AUTONOMY`, so loosening it is always an explicit act rather than a quiet
+edit to a dotfile.
+
 ## Status
 
 Early and evolving. Progress so far:
@@ -80,7 +116,8 @@ Early and evolving. Progress so far:
 - **M1** — read-only status over MCP
 - **M2** — operations declared in a YAML registry
 - **M3** — approval gate and the first mutating operations
-- **i18n** — bilingual tool text and messages (English default, `WARD_LANG=ja`)
+- **i18n** — bilingual tool text and messages (English default), configurable via the
+  config file (`language: ja`) or `WARD_LANG`
 
 **Install & quickstart docs are coming** as the interface settles. Until then the
 [issues](https://github.com/ruribou/ward/issues) track what's planned.

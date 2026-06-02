@@ -76,3 +76,19 @@ cli:
       ward approve <id>     approve and run a pending proposal
       ward reject <id>      discard a pending proposal without running it
       ward metrics [path]   summarize the audit log (success / intervention / blast radius)
+      ward config ...       view or set user preferences (language, ssh_host)
+  config:
+    usage: |-
+      ward config — view or set user preferences in ~/.ward/config.yaml.
+      Usage:
+        ward config get            show the stored preferences (and the file path)
+        ward config set <key> <v>  set a preference (key: language | ssh_host)
+        ward config path           print the resolved config file path
+      Note: ssh_host is an ALIAS only (resolved by ~/.ssh/config) — never a real IP or hostname.
+    getHeader: "ward config — preferences in {path}:"
+    valueLine: "  {key} = {value}"
+    unsetLine: "  {key} = (unset → default)"
+    setOk: "ward config: set {key} = {value} in {path}"
+    unknownKey: 'ward config: "{key}" is not a settable key (try: language, ssh_host).'
+    invalidValue: "ward config: {error}"
+    path: "{path}"

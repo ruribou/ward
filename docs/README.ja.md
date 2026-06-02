@@ -54,6 +54,39 @@ ward は既定で読み取り専用。エージェントを信用する代わり
 2. **`approval`** — 提案できる。実行は人間の承認後。
 3. **`autonomous`** — ポリシー内なら承認なしで動く。**未実装。**
 
+## 設定
+
+ユーザ設定は設定ファイル（`~/.ward/config.yaml`）に置き、環境変数をプロセス単位の上書きとして使えます。
+優先順位は **env > ファイル > 既定値**。単発の実行では env が常に勝ち、ファイルは MCP サーバと
+`ward` CLI が共有する永続的な設定になります。
+
+設定できるキーは 2 つ:
+
+- **`language`** — UI 言語（既定 `en`、または `ja`）。env での上書きは `WARD_LANG`。
+- **`ssh_host`** — SSH ホストの**別名**（env での上書きは `WARD_SSH_HOST`）。
+
+```yaml
+# ~/.ward/config.yaml
+language: ja
+ssh_host: nuc
+```
+
+CLI から設定すると、ファイルへの書き込みも行われます。
+
+```sh
+ward config set language ja
+ward config set ssh_host nuc
+ward config get           # 保存値とファイルパスを表示
+ward config path          # 解決済みの設定ファイルパスを表示
+```
+
+> **`ssh_host` は別名のみ——実 IP やホスト名は書かない。** ward は `~/.ssh/config` 経由で解決し、
+> 実アドレスはそちらに残ります。`~/.ward/config.yaml` には別名だけを書きます。ward 側でも強制しており、
+> スペース・コロン・スラッシュを含む値は拒否されます。
+
+`autonomy` は意図的にファイルでは設定できません——ガードレール属性なので `WARD_AUTONOMY` でのみ設定し、
+緩めるのは常に明示的な操作であって、dotfile の静かな編集にはしません。
+
 ## 現在地
 
 まだ初期段階です。ここまで:
@@ -61,7 +94,7 @@ ward は既定で読み取り専用。エージェントを信用する代わり
 - **M1** — MCP 経由の読み取り専用ステータス
 - **M2** — 操作を YAML レジストリで宣言
 - **M3** — 承認ゲートと、初の mutating な操作
-- **i18n** — 文言の二言語化（既定は英語、`WARD_LANG=ja` で日本語）
+- **i18n** — 文言の二言語化（既定は英語）。設定ファイル（`language: ja`）または `WARD_LANG` で切り替え
 
 **インストール手順はこれから。** 落ち着き次第そろえます。計画は [issues](https://github.com/ruribou/ward/issues) に。
 
