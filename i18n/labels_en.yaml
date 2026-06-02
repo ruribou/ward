@@ -25,12 +25,12 @@ ops:
     description: Returns the systemd units that failed to start or run (systemctl --failed) — a first health check.
   nuc_pull:
     title: Pull image
-    description: Pulls the Docker image hello-world onto the NUC (docker pull). A write operation that changes the NUC's disk state — it requires approval. Check the result with nuc_images.
-    plan: Adds the hello-world image to the NUC's local Docker image store. If it is already present this only refreshes it — nothing else changes. Reversible with nuc_rmi.
+    description: Pulls a Docker image onto the NUC (docker pull), chosen from a fixed allowlist (image — one of hello-world, alpine, busybox, nginx). A write operation that changes the NUC's disk state — it requires approval. Check the result with nuc_images.
+    plan: Adds the chosen image to the NUC's local Docker image store. If it is already present this only refreshes it — nothing else changes. Reversible with nuc_rmi.
   nuc_rmi:
     title: Remove image
-    description: Removes the Docker image hello-world from the NUC (docker rmi). The inverse of nuc_pull — a rollback. A write operation — it requires approval.
-    plan: Removes the hello-world image from the NUC's local Docker image store. If it is not present this is a no-op. Reversible with nuc_pull.
+    description: Removes a Docker image from the NUC (docker rmi), chosen from a fixed allowlist (image — one of hello-world, alpine, busybox, nginx). The inverse of nuc_pull — a rollback. A write operation — it requires approval.
+    plan: Removes the chosen image from the NUC's local Docker image store. If it is not present this is a no-op. Reversible with nuc_pull.
 proposal:
   notice: |-
     Proposal {id} — this operation changes the NUC (risk: {risk}). It will not run until a human approves it.

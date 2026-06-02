@@ -172,8 +172,8 @@ describe("end to end — AI proposes via MCP, human approves via CLI (shared sto
     const client = new Client({ name: "test", version: "0" });
     await Promise.all([client.connect(ct), server.connect(st)]);
 
-    // AI proposes — the server writes to the store but runs nothing.
-    await client.callTool({ name: "nuc_pull", arguments: {} });
+    // AI proposes — the server writes the RESOLVED op to the store but runs nothing.
+    await client.callTool({ name: "nuc_pull", arguments: { image: "hello-world" } });
     expect(serverRun).not.toHaveBeenCalled();
 
     // Human approves out of band, in a separate process reading the same store.

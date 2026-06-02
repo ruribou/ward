@@ -170,12 +170,15 @@ describe("ward MCP server — propose only, approval is out of band (in-memory)"
       proposals,
     });
 
-    const text = textOf(await client.callTool({ name: "nuc_pull", arguments: {} }));
+    const text = textOf(
+      await client.callTool({ name: "nuc_pull", arguments: { image: "hello-world" } }),
+    );
     expect(text).toContain("Proposal p1");
     expect(text).toContain("docker pull hello-world");
     expect(text).toContain("Plan:");
     expect(text).toContain("ward approve p1");
     expect(runOperation).not.toHaveBeenCalled();
+    // The proposal carries the RESOLVED command — no {image} placeholder survives.
     expect(proposals.get("p1")?.op.command).toEqual(["docker", "pull", "hello-world"]);
   });
 
@@ -209,15 +212,85 @@ describe("ward MCP server — propose only, approval is out of band (in-memory)"
   });
 });
 
+describe("ward MCP server — parameterized op with an enum allowlist (in-memory)", () => {
+  // A small parameterized mutating op, pinned so the test does not depend on the real registry.
+  const paramRegistry: readonly Operation[] = [
+    {
+      name: "nuc_pull",
+      risk: "mutating",
+      command: ["docker", "pull", "{image}"],
+      precheck: ["docker", "images", "{image}"],
+      params: [{ name: "image", allow: ["hello-world", "alpine"] }],
+    },
+  ];
+
+  it("advertises the parameter as an enum in the tool's input schema", async () => {
+    const client = await connect({
+      autonomy: "approval",
+      operations: paramRegistry,
+      runOperation: async () => fakeResult(),
+      audit: () => {},
+    });
+    const tool = (await client.listTools()).tools.find((t) => t.name === "nuc_pull");
+    const image = (tool?.inputSchema?.properties as Record<string, { enum?: string[] }>).image;
+    expect(image?.enum).toEqual(["hello-world", "alpine"]);
+    expect(tool?.inputSchema?.required).toContain("image");
+  });
+
+  it("stages a proposal carrying the RESOLVED command for the chosen enum member", async () => {
+    const runOperation = vi.fn(async () => fakeResult());
+    const proposals = tempStore();
+    const client = await connect({
+      autonomy: "approval",
+      operations: paramRegistry,
+      runOperation,
+      audit: () => {},
+      proposals,
+    });
+
+    const text = textOf(
+      await client.callTool({ name: "nuc_pull", arguments: { image: "alpine" } }),
+    );
+    expect(text).toContain("docker pull alpine"); // resolved, not {image}
+    expect(text).not.toContain("{image}");
+    expect(runOperation).not.toHaveBeenCalled();
+    // The proposal stores the concrete command — approve runs exactly this.
+    expect(proposals.get("p1")?.op.command).toEqual(["docker", "pull", "alpine"]);
+  });
+
+  it("rejects an out-of-enum value at the tool boundary (schema) without staging anything", async () => {
+    const runOperation = vi.fn(async () => fakeResult());
+    const proposals = tempStore();
+    const client = await connect({
+      autonomy: "approval",
+      operations: paramRegistry,
+      runOperation,
+      audit: () => {},
+      proposals,
+    });
+
+    // The MCP schema constraint surfaces an out-of-enum value as a tool error — the
+    // handler never runs, so nothing is executed and nothing is staged.
+    const res = (await client.callTool({
+      name: "nuc_pull",
+      arguments: { image: "ubuntu" },
+    })) as { isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toContain("Invalid");
+    expect(runOperation).not.toHaveBeenCalled();
+    expect(proposals.list()).toHaveLength(0);
+  });
+});
+
 describe("ward MCP server — plan preview before approval (in-memory)", () => {
   it("shows the effect description and precheck in a real mutating op's proposal", async () => {
     const runOperation = vi.fn(async () => fakeResult());
     const client = await connect({ autonomy: "approval", runOperation, audit: () => {} });
 
-    const res = await client.callTool({ name: "nuc_pull", arguments: {} });
+    const res = await client.callTool({ name: "nuc_pull", arguments: { image: "hello-world" } });
     const text = textOf(res);
     expect(text).toContain("Plan:");
-    expect(text).toContain("hello-world image"); // from the en plan description
+    expect(text).toContain("chosen image"); // from the en plan description
     expect(text).toContain("Verify first (read-only): $ docker images hello-world");
     // The plan never runs the precheck — propose stays pure (nothing touches the NUC).
     expect(runOperation).not.toHaveBeenCalled();
@@ -231,7 +304,9 @@ describe("ward MCP server — plan preview before approval (in-memory)", () => {
       audit: () => {},
     });
 
-    const text = textOf(await client.callTool({ name: "nuc_pull", arguments: {} }));
+    const text = textOf(
+      await client.callTool({ name: "nuc_pull", arguments: { image: "hello-world" } }),
+    );
     expect(text).toContain("plan:");
     expect(text).toContain("ローカル Docker イメージストアに追加"); // from the ja plan description
     expect(text).toContain("先に確認（read-only）: $ docker images hello-world");

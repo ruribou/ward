@@ -33,10 +33,16 @@ operations:
 
   - name: nuc_pull
     risk: mutating
-    command: [docker, pull, hello-world]
-    precheck: [docker, images, hello-world]
+    command: [docker, pull, "{image}"]
+    precheck: [docker, images, "{image}"]
+    params:
+      - name: image
+        allow: [hello-world, alpine, busybox, nginx]
 
   - name: nuc_rmi
     risk: mutating
-    command: [docker, rmi, hello-world]
-    precheck: [docker, images, hello-world]
+    command: [docker, rmi, "{image}"]
+    precheck: [docker, images, "{image}"]
+    params:
+      - name: image
+        allow: [hello-world, alpine, busybox, nginx]

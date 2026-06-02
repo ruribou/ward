@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { LOCALES } from "../../config.js";
 import { getLabel } from "../../i18n/index.js";
-import { OperationLoadError, operations, parseOperations } from "../../registry/operations.js";
+import {
+  OperationLoadError,
+  ParamResolutionError,
+  operations,
+  parseOperations,
+  resolveOperation,
+} from "../../registry/operations.js";
 
 describe("operations registry", () => {
   it("is non-empty and uniquely named", () => {
@@ -28,12 +34,23 @@ describe("operations registry", () => {
     }
   });
 
-  it("has constant commands with no shell metacharacters (no injection surface)", () => {
+  it("has commands of constants or {param} placeholders only (no shell metacharacters)", () => {
     for (const op of operations) {
       expect(op.command.length).toBeGreaterThan(0);
       for (const part of op.command) {
+        expect(part).toMatch(/^[A-Za-z0-9_.-]+$|^\{[a-z][a-z0-9_]*\}$/);
+      }
+    }
+  });
+
+  it("resolves every parameterized op to a concrete, placeholder-free command", () => {
+    for (const op of operations.filter((o) => o.params !== undefined)) {
+      const args = Object.fromEntries((op.params ?? []).map((p) => [p.name, p.allow[0]!]));
+      const resolved = resolveOperation(op, args);
+      for (const part of [...resolved.command, ...(resolved.precheck ?? [])]) {
         expect(part).toMatch(/^[A-Za-z0-9_.-]+$/);
       }
+      expect(resolved.params).toBeUndefined();
     }
   });
 
@@ -148,5 +165,134 @@ operations:
     precheck: []
 `;
     expect(() => parseOperations(yaml)).toThrow(/precheck must be a non-empty array/);
+  });
+});
+
+describe("parseOperations — parameterized operations (enum allowlist)", () => {
+  const paramOp = (body: string) => `
+operations:
+  - name: nuc_pull
+    risk: mutating
+    command: [docker, pull, "{image}"]
+${body}
+`;
+
+  it("loads a valid parameterized op and keeps its declared enum", () => {
+    const ops = parseOperations(
+      paramOp(`    params:\n      - name: image\n        allow: [hello-world, alpine]`),
+    );
+    expect(ops[0]?.command).toEqual(["docker", "pull", "{image}"]);
+    expect(ops[0]?.params).toEqual([{ name: "image", allow: ["hello-world", "alpine"] }]);
+  });
+
+  it("validates a placeholder used in precheck too", () => {
+    const yaml = `
+operations:
+  - name: nuc_rmi
+    risk: mutating
+    command: [docker, rmi, "{image}"]
+    precheck: [docker, images, "{image}"]
+    params:
+      - name: image
+        allow: [alpine]
+`;
+    expect(parseOperations(yaml)[0]?.precheck).toEqual(["docker", "images", "{image}"]);
+  });
+
+  it("rejects an enum member that fails the charset guard", () => {
+    expect(() =>
+      parseOperations(paramOp(`    params:\n      - name: image\n        allow: ["alpine:3.20"]`)),
+    ).toThrow(/allow has an unsafe value/);
+  });
+
+  it("rejects an empty enum", () => {
+    expect(() =>
+      parseOperations(paramOp(`    params:\n      - name: image\n        allow: []`)),
+    ).toThrow(/allow must be a non-empty enum/);
+  });
+
+  it("rejects a placeholder with no matching param declaration", () => {
+    expect(() =>
+      parseOperations(paramOp(`    params:\n      - name: tag\n        allow: [latest]`)),
+    ).toThrow(/uses placeholder \{image\} but declares no param "image"/);
+  });
+
+  it("rejects a declared param that is never referenced", () => {
+    const yaml = `
+operations:
+  - name: nuc_pull
+    risk: mutating
+    command: [docker, pull, hello-world]
+    params:
+      - name: image
+        allow: [hello-world]
+`;
+    expect(() => parseOperations(yaml)).toThrow(/never uses \{image\}/);
+  });
+
+  it("rejects a duplicate param name", () => {
+    const yaml = `
+operations:
+  - name: nuc_pull
+    risk: mutating
+    command: [docker, pull, "{image}"]
+    params:
+      - name: image
+        allow: [alpine]
+      - name: image
+        allow: [nginx]
+`;
+    expect(() => parseOperations(yaml)).toThrow(/duplicate parameter "image"/);
+  });
+
+  it("rejects an unsafe param name", () => {
+    expect(() =>
+      parseOperations(paramOp(`    params:\n      - name: Image\n        allow: [alpine]`)),
+    ).toThrow(/params\[0\].name must match/);
+  });
+});
+
+describe("resolveOperation — enforces the enum and substitutes (no placeholder survives)", () => {
+  const op = parseOperations(`
+operations:
+  - name: nuc_pull
+    risk: mutating
+    command: [docker, pull, "{image}"]
+    precheck: [docker, images, "{image}"]
+    params:
+      - name: image
+        allow: [hello-world, alpine]
+`)[0]!;
+
+  it("substitutes a chosen enum member into command and precheck", () => {
+    const resolved = resolveOperation(op, { image: "alpine" });
+    expect(resolved.command).toEqual(["docker", "pull", "alpine"]);
+    expect(resolved.precheck).toEqual(["docker", "images", "alpine"]);
+    expect(resolved.params).toBeUndefined(); // a resolved op carries no params
+  });
+
+  it("rejects a value outside the enum allowlist", () => {
+    expect(() => resolveOperation(op, { image: "ubuntu" })).toThrow(ParamResolutionError);
+    expect(() => resolveOperation(op, { image: "ubuntu" })).toThrow(/must be one of/);
+  });
+
+  it("rejects a missing required parameter", () => {
+    expect(() => resolveOperation(op, {})).toThrow(/requires parameter "image"/);
+  });
+
+  it("rejects an unexpected parameter key", () => {
+    expect(() => resolveOperation(op, { image: "alpine", tag: "latest" })).toThrow(
+      /has no parameter "tag"/,
+    );
+  });
+
+  it("returns a no-param op unchanged when given no arguments", () => {
+    const plain = parseOperations(`
+operations:
+  - name: nuc_uptime
+    risk: read-only
+    command: [uptime]
+`)[0]!;
+    expect(resolveOperation(plain)).toEqual(plain);
   });
 });
